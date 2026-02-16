@@ -3,7 +3,7 @@
 # Run: powershell.exe -File scripts/download-models.ps1
 
 param(
-    [string]$ProjectRoot = (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent)
+    [string]$ProjectRoot = (Split-Path $PSScriptRoot -Parent)
 )
 
 $ErrorActionPreference = "Stop"

@@ -31,20 +31,37 @@ public class VoiceManager : IVoiceManager
         // Initial scan
         ScanVoices();
 
-        // Set up FileSystemWatcher
+        // Set up FileSystemWatcher for both ONNX and JSON files
         _watcher = new FileSystemWatcher(_voicesPath)
         {
-            Filter = "*.onnx",
+            Filter = "*.*",
             NotifyFilter = NotifyFilters.FileName
         };
 
-        _watcher.Created += (s, e) => DebounceRescan();
-        _watcher.Deleted += (s, e) => DebounceRescan();
+        _watcher.Created += (s, e) =>
+        {
+            if (!string.IsNullOrEmpty(e.Name) &&
+                (e.Name.EndsWith(".onnx", StringComparison.OrdinalIgnoreCase) ||
+                e.Name.EndsWith(".onnx.json", StringComparison.OrdinalIgnoreCase)))
+            {
+                DebounceRescan();
+            }
+        };
+        _watcher.Deleted += (s, e) =>
+        {
+            if (!string.IsNullOrEmpty(e.Name) &&
+                (e.Name.EndsWith(".onnx", StringComparison.OrdinalIgnoreCase) ||
+                e.Name.EndsWith(".onnx.json", StringComparison.OrdinalIgnoreCase)))
+            {
+                DebounceRescan();
+            }
+        };
         _watcher.EnableRaisingEvents = true;
     }
 
     public IReadOnlyList<VoiceInfo> GetAvailableVoices()
     {
+        ThrowIfDisposed();
         _catalogLock.EnterReadLock();
         try
         {
@@ -58,6 +75,7 @@ public class VoiceManager : IVoiceManager
 
     public VoiceInfo? GetVoice(string voiceId)
     {
+        ThrowIfDisposed();
         _catalogLock.EnterReadLock();
         try
         {
@@ -71,6 +89,7 @@ public class VoiceManager : IVoiceManager
 
     public string ResolveVoiceId(string? requestedVoiceId)
     {
+        ThrowIfDisposed();
         if (requestedVoiceId == null)
         {
             return _defaultVoice;
@@ -89,7 +108,7 @@ public class VoiceManager : IVoiceManager
             _catalogLock.ExitReadLock();
         }
 
-        _logger.LogWarning($"Requested voice '{requestedVoiceId}' not found. Falling back to default voice '{_defaultVoice}'.");
+        _logger.LogWarning("Requested voice '{RequestedVoiceId}' not found. Falling back to default voice '{DefaultVoice}'.", requestedVoiceId, _defaultVoice);
         return _defaultVoice;
     }
 
@@ -119,7 +138,7 @@ public class VoiceManager : IVoiceManager
 
             if (!File.Exists(jsonPath))
             {
-                _logger.LogWarning($"Orphaned ONNX file without matching JSON: {onnxPath}");
+                _logger.LogWarning("Orphaned ONNX file without matching JSON: {OnnxPath}", onnxPath);
                 continue;
             }
 
@@ -133,7 +152,7 @@ public class VoiceManager : IVoiceManager
             }
             catch (Exception ex)
             {
-                _logger.LogError($"Failed to parse voice metadata from {jsonPath}: {ex.Message}");
+                _logger.LogError(ex, "Failed to parse voice metadata from {JsonPath}", jsonPath);
             }
         }
 
@@ -147,7 +166,7 @@ public class VoiceManager : IVoiceManager
             _catalogLock.ExitWriteLock();
         }
 
-        _logger.LogInformation($"Voice catalog updated. Found {newCatalog.Count} valid voice(s).");
+        _logger.LogInformation("Voice catalog updated. Found {VoiceCount} valid voice(s).", newCatalog.Count);
     }
 
     private VoiceInfo? ParseVoiceInfo(string onnxPath, string jsonPath)
@@ -179,26 +198,33 @@ public class VoiceManager : IVoiceManager
         }
         catch (JsonException ex)
         {
-            _logger.LogError($"Invalid JSON in {jsonPath}: {ex.Message}");
+            _logger.LogError(ex, "Invalid JSON in {JsonPath}", jsonPath);
             return null;
         }
     }
 
-    private object _rescanLock = new object();
+    private readonly object _rescanLock = new();
     private CancellationTokenSource? _rescanCts;
 
     private void DebounceRescan()
     {
+        if (_disposed)
+            return;
+
         lock (_rescanLock)
         {
+            if (_disposed)
+                return;
+
             _rescanCts?.Cancel();
+            _rescanCts?.Dispose();
             _rescanCts = new CancellationTokenSource();
             var cts = _rescanCts;
 
             Task.Delay(100, cts.Token)
                 .ContinueWith(_ =>
                 {
-                    if (!cts.Token.IsCancellationRequested)
+                    if (!cts.Token.IsCancellationRequested && !_disposed)
                     {
                         ScanVoices();
                     }
@@ -210,9 +236,23 @@ public class VoiceManager : IVoiceManager
     {
         if (_disposed) return;
 
-        _watcher?.Dispose();
+        // Disable the watcher before disposing to prevent race conditions
+        if (_watcher != null)
+        {
+            _watcher.EnableRaisingEvents = false;
+            _watcher.Dispose();
+        }
+
         _catalogLock?.Dispose();
         _rescanCts?.Dispose();
         _disposed = true;
+    }
+
+    private void ThrowIfDisposed()
+    {
+        if (_disposed)
+        {
+            throw new ObjectDisposedException(GetType().Name);
+        }
     }
 }

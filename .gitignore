@@ -1,6 +1,7 @@
 # Voice models (large binary files)
 voices/
 espeak-ng-data/
+temp/
 
 # Build results
 bin/

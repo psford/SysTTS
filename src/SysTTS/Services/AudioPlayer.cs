@@ -6,6 +6,8 @@ namespace SysTTS.Services;
 public class AudioPlayer : IAudioPlayer
 {
     private readonly ILogger<AudioPlayer> _logger;
+    private CancellationTokenSource? _currentPlaybackCts;
+    private readonly object _playbackLock = new();
 
     public AudioPlayer(ILogger<AudioPlayer> logger)
     {
@@ -73,6 +75,14 @@ public class AudioPlayer : IAudioPlayer
             using var waveStream = new RawSourceWaveStream(memoryStream, new WaveFormat(sampleRate, 16, 1));
             using var waveOutEvent = new WaveOutEvent();
 
+            // Create a linked CTS that combines the passed cancellation token with our internal one
+            lock (_playbackLock)
+            {
+                _currentPlaybackCts?.Dispose();
+                _currentPlaybackCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            }
+
+            var linkedToken = _currentPlaybackCts.Token;
             var playbackCompletionSource = new TaskCompletionSource<bool>();
 
             void PlaybackStoppedHandler(object? sender, StoppedEventArgs e)
@@ -95,8 +105,8 @@ public class AudioPlayer : IAudioPlayer
                 waveOutEvent.Init(waveStream);
                 waveOutEvent.Play();
 
-                // Register cancellation token
-                using var registration = cancellationToken.Register(() =>
+                // Register cancellation token (linked with both passed token and internal one)
+                using var registration = linkedToken.Register(() =>
                 {
                     try
                     {
@@ -125,8 +135,19 @@ public class AudioPlayer : IAudioPlayer
 
     public void Stop()
     {
-        // Stop is called from cancellation token registration or caller
-        // The actual stop happens through the waveOutEvent instance in PlayAsync
-        // This method provides explicit stop capability if needed
+        lock (_playbackLock)
+        {
+            if (_currentPlaybackCts != null && !_currentPlaybackCts.Token.IsCancellationRequested)
+            {
+                try
+                {
+                    _currentPlaybackCts.Cancel();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error cancelling playback");
+                }
+            }
+        }
     }
 }
