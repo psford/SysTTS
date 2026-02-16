@@ -1,0 +1,27 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>SysTTS Settings</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="container">
+    <div class="section">
+      <label for="voice-select">Voice</label>
+      <select id="voice-select">
+        <option value="">Loading...</option>
+      </select>
+    </div>
+
+    <div class="section" id="text-section" style="display: none;">
+      <label for="text-input">Text to Speak</label>
+      <textarea id="text-input" placeholder="Enter the text to be spoken..."></textarea>
+    </div>
+  </div>
+
+  <script src="../../../node_modules/@elgato/streamdeck/dist/browser.js"></script>
+  <script src="settings.js"></script>
+</body>
+</html>
