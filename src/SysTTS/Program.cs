@@ -35,7 +35,7 @@ static class Program
         }));
 
         // Start Kestrel on background threads
-        var appCts = new CancellationTokenSource();
+        using var appCts = new CancellationTokenSource();
         var webTask = app.RunAsync(appCts.Token);
 
         // Wait for Kestrel to start or fail (port-in-use detection)
