@@ -117,7 +117,7 @@ public class SpeechService : ISpeechService
         {
             try
             {
-                if (Regex.IsMatch(text, pattern, RegexOptions.IgnoreCase))
+                if (Regex.IsMatch(text, pattern, RegexOptions.IgnoreCase, TimeSpan.FromMilliseconds(100)))
                 {
                     _logger.LogDebug("Text matched filter pattern: {Pattern}", pattern);
                     return true;

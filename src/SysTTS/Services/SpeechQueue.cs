@@ -2,7 +2,6 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using SysTTS.Models;
 using SysTTS.Settings;
-using System.Collections.Concurrent;
 
 namespace SysTTS.Services;
 
@@ -178,6 +177,17 @@ public class SpeechQueue : ISpeechQueue, IDisposable
 
             // Synthesize speech
             var (samples, sampleRate) = _ttsEngine.Synthesize(request.Text, request.VoiceId);
+
+            // Check if the current request has been cancelled (e.g., by StopAndClear)
+            // before attempting to play the synthesized audio
+            lock (_queueLock)
+            {
+                if (_currentPlaybackCts?.IsCancellationRequested ?? false)
+                {
+                    _logger.LogInformation("Speech request {RequestId} was cancelled after synthesis, skipping playback", request.Id);
+                    throw new OperationCanceledException();
+                }
+            }
 
             // Play audio with linked cancellation token (current playback + shutdown)
             using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(

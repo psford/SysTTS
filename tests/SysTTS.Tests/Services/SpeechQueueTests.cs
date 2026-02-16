@@ -76,7 +76,6 @@ public class SpeechQueueTests : IDisposable
 
         // Make PlayAsync wait so we can interrupt it
         var playStarted = new TaskCompletionSource();
-        var playCanContinue = new TaskCompletionSource();
 
         _mockAudioPlayer.Setup(a => a.PlayAsync(It.IsAny<float[]>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .Returns<float[], int, CancellationToken>(async (samples, rate, ct) =>
@@ -107,47 +106,68 @@ public class SpeechQueueTests : IDisposable
         // Wait a bit for interrupt to occur
         await Task.Delay(200).ConfigureAwait(false);
 
-        // Assert - PlayAsync should have been called at least twice (interrupted and retried)
-        // The high-priority interrupt should have cancelled the low-priority playback
+        // Assert - PlayAsync should have been called at least twice
+        // Once for low-priority (which is interrupted and cancelled)
+        // And again for the high-priority request that interrupts it
         _mockAudioPlayer.Verify(
             a => a.PlayAsync(It.IsAny<float[]>(), It.IsAny<int>(), It.IsAny<CancellationToken>()),
-            Times.AtLeastOnce
+            Times.AtLeast(2)
         );
     }
 
     // AC2.8: Queue at max depth drops lowest-priority item when new request arrives
     [Fact]
-    public void Enqueue_QueueAtMaxDepth_DropsLowestPriorityItem()
+    public async Task Enqueue_QueueAtMaxDepth_DropsLowestPriorityItem()
     {
         // Arrange
         _settings.MaxQueueDepth = 3;
         _queue = CreateQueue();
 
-        // Slow down processing so items accumulate
-        _mockAudioPlayer.Setup(a => a.PlayAsync(It.IsAny<float[]>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .Returns(async (float[] samples, int rate, CancellationToken ct) =>
-                await Task.Delay(500, ct).ConfigureAwait(false));
+        var processedRequestIds = new List<string>();
+        var processingBlocked = new TaskCompletionSource();
 
-        var request1 = new SpeechRequest("1", "Text 1", "voice", 1, "test");
-        var request2 = new SpeechRequest("2", "Text 2", "voice", 2, "test");
-        var request3 = new SpeechRequest("3", "Text 3", "voice", 3, "test");
-        var request4 = new SpeechRequest("4", "Text 4", "voice", 3, "test"); // Same priority as 3, but newer
-        var request5 = new SpeechRequest("5", "Text 5", "voice", 3, "test"); // This should evict request3
+        // Block processing loop so items accumulate in queue
+        _mockAudioPlayer.Setup(a => a.PlayAsync(It.IsAny<float[]>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
+            .Returns<float[], int, CancellationToken>(async (samples, rate, ct) =>
+            {
+                // Record which request was processed
+                var invocation = _mockTtsEngine.Invocations.LastOrDefault();
+                if (invocation != null)
+                {
+                    var voiceArg = (string)invocation.Arguments[1];
+                    processedRequestIds.Add(voiceArg);
+                }
+                // Block indefinitely until unblocked
+                await processingBlocked.Task.ConfigureAwait(false);
+            });
+
+        var request1 = new SpeechRequest("1", "Text 1", "voice-1", 1, "test");
+        var request2 = new SpeechRequest("2", "Text 2", "voice-2", 2, "test");
+        var request3 = new SpeechRequest("3", "Text 3", "voice-3", 3, "test");
+        var request4 = new SpeechRequest("4", "Text 4", "voice-4", 3, "test"); // Same priority as 3, but newer
+        var request5 = new SpeechRequest("5", "Text 5", "voice-5", 3, "test"); // This should evict request3
 
         // Act
         _queue.Enqueue(request1); // Queue: [1]
-        _queue.Enqueue(request2); // Queue: [1, 2]
+        await Task.Delay(50).ConfigureAwait(false);
+
+        _queue.Enqueue(request2); // Queue: [1, 2] (request1 is being processed)
         _queue.Enqueue(request3); // Queue: [1, 2, 3]
 
         // Queue is now at max depth (3)
-        // Adding a 4th item should evict the lowest-priority oldest item (request3, priority 3, oldest)
-        _queue.Enqueue(request4); // Queue should be [1, 2, 4]
+        // Adding a 4th item should evict the lowest-priority oldest item (request3)
+        _queue.Enqueue(request4); // Queue should be [1, 2, 4] (request3 evicted)
 
         // Adding request5 (priority 3) should evict request4 (oldest with priority 3)
-        _queue.Enqueue(request5); // Queue should be [1, 2, 5]
+        _queue.Enqueue(request5); // Queue should be [1, 2, 5] (request4 evicted)
 
         // Assert
         _queue.QueueDepth.Should().Be(3);
+
+        // Verify that request3 and request4 were NOT processed (evicted before processing)
+        // Only request1 should have been processed so far
+        processedRequestIds.Should().NotContain("voice-3");
+        processedRequestIds.Should().NotContain("voice-4");
     }
 
     // Additional test: Multiple requests processed in priority order
@@ -157,18 +177,12 @@ public class SpeechQueueTests : IDisposable
         // Arrange
         _queue = CreateQueue();
 
-        var processedIds = new List<string>();
-
         _mockAudioPlayer.Setup(a => a.PlayAsync(It.IsAny<float[]>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
-            .Callback<float[], int, CancellationToken>((samples, rate, ct) =>
-            {
-                // This won't help us track order since it's async, so we'll verify through queue behavior
-            })
             .Returns(Task.CompletedTask);
 
-        var request3 = new SpeechRequest("3", "Priority 3", "voice", 3, "test");
-        var request1 = new SpeechRequest("1", "Priority 1", "voice", 1, "test");
-        var request2 = new SpeechRequest("2", "Priority 2", "voice", 2, "test");
+        var request3 = new SpeechRequest("3", "Priority 3", "voice-3", 3, "test");
+        var request1 = new SpeechRequest("1", "Priority 1", "voice-1", 1, "test");
+        var request2 = new SpeechRequest("2", "Priority 2", "voice-2", 2, "test");
 
         // Act - enqueue out of priority order
         _queue.Enqueue(request3);
@@ -178,18 +192,16 @@ public class SpeechQueueTests : IDisposable
         // Wait for queue to process
         await Task.Delay(200).ConfigureAwait(false);
 
-        // Assert - Verify that lower priority numbers are synthesized first
-        // by checking call order to Synthesize
+        // Assert - Verify that priority 1 request (with voice-1) is synthesized FIRST
+        // by checking the voice IDs passed to Synthesize in order
         var calls = _mockTtsEngine.Invocations
             .Where(i => i.Method.Name == nameof(ITtsEngine.Synthesize))
             .Select(i => (string)i.Arguments[1])
             .ToList();
 
-        // First call should be for priority 1
-        if (calls.Count > 0)
-        {
-            calls[0].Should().Be("voice");
-        }
+        // First call should be for priority 1 (voice-1)
+        calls.Count.Should().BeGreaterThan(0);
+        calls[0].Should().Be("voice-1");
     }
 
     // Additional test: StopAndClear cancels current and empties queue
