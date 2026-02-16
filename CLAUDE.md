@@ -1,5 +1,7 @@
 # CLAUDE.md — SysTTS Project Conventions
 
+> Last verified: 2026-02-15
+
 Claude Code development guidelines for the SysTTS project.
 
 ---
@@ -35,15 +37,16 @@ SysTTS/
 │   │   ├── AudioPlayer.cs         # NAudio WaveOutEvent wrapper
 │   │   ├── SpeechQueue.cs         # Priority queue with serial processing
 │   │   ├── SpeechService.cs       # Source filtering, voice resolution
-│   │   ├── HotkeyService.cs       # Win32 keyboard hooks
-│   │   └── ClipboardService.cs    # Clipboard save/restore, Ctrl+C simulation
+│   │   ├── HotkeyService.cs       # Win32 keyboard hooks (dedicated thread)
+│   │   ├── ClipboardService.cs    # Clipboard save/restore, Ctrl+C simulation
+│   │   └── UserPreferences.cs     # Persists picker voice to user-preferences.json
 │   ├── Handlers/                  # HTTP request handlers
 │   │   └── SpeakSelectionHandler.cs # Clipboard integration for hotkeys
 │   ├── Interop/                   # Win32 P/Invoke declarations
 │   │   ├── NativeMethods.cs       # Win32 API declarations
 │   │   └── VirtualKeyParser.cs    # Virtual key code parsing
 │   ├── Models/                    # DTOs and data models
-│   ├── Settings/                  # Settings classes (ServiceSettings, AudioSettings)
+│   ├── Settings/                  # Settings POCOs (Service, Audio, Hotkey, Source)
 │   ├── Forms/                     # WinForms UI
 │   │   └── VoicePickerForm.cs     # Voice selection dialog
 │   └── SysTTS.csproj              # Project configuration
@@ -70,6 +73,8 @@ SysTTS/
 │
 ├── espeak-ng-data/                # Shared phonemization data (gitignored)
 │   └── ...
+│
+├── user-preferences.json          # Runtime: persisted picker voice (gitignored)
 │
 ├── scripts/                       # Utility scripts
 │   ├── download-models.ps1        # Download voice models from HuggingFace
@@ -192,9 +197,15 @@ dotnet test tests/SysTTS.Tests/ /p:CollectCoverageData=true
 ### Threading Model
 
 - **Main STA Thread:** WinForms application context, message pump
-  - Required for Win32 keyboard hooks (HotkeyService)
   - Required for clipboard operations (safe access)
   - Required for UI dialogs (VoicePickerForm)
+  - SynchronizationContext captured at startup and injected via DI
+
+- **HotkeyService-Hook Thread:** Dedicated background thread with its own message pump
+  - Installs WH_KEYBOARD_LL hook (requires a message loop on the installing thread)
+  - Runs `Application.Run()` to pump messages for the hook callback
+  - Offloads hotkey processing to `Task.Run()` to stay within 1000ms callback timeout
+  - Marshals UI operations (VoicePickerForm) to STA thread via SynchronizationContext
 
 - **Kestrel Thread Pool:** ASP.NET Core HTTP API
   - Runs on background threads (controlled by Kestrel)
@@ -227,12 +238,14 @@ dotnet test tests/SysTTS.Tests/ /p:CollectCoverageData=true
 
 ### Win32 Keyboard Hooks
 
-- Registered via P/Invoke (Win32 API)
-- Callback runs on Kestrel thread pool (dispatched to UI thread as needed)
-- Global hotkeys (F22, F23) intercepted system-wide
+- Uses `WH_KEYBOARD_LL` low-level hook via P/Invoke (not `RegisterHotKey`)
+- Hook installed on dedicated `HotkeyService-Hook` background thread with its own message pump
+- Callback filters for registered virtual key codes from config (e.g., F22, F23)
+- Processing offloaded to `Task.Run()` to avoid blocking the 1000ms hook callback timeout
+- Delegate reference stored in field to prevent GC collection
 - Supports two modes:
-  - **Direct:** Immediately speak clipboard with configured voice
-  - **Picker:** Show VoicePickerForm to let user select voice, then speak
+  - **Direct:** Immediately capture selected text via ClipboardService and speak with configured voice
+  - **Picker:** Capture text, show VoicePickerForm on STA thread (via SynchronizationContext), speak with selected voice
 
 ### Sherpa-ONNX & NAudio
 
@@ -310,8 +323,9 @@ dotnet test tests/SysTTS.Tests/ /p:CollectCoverageData=true
 | `/api/stop` | POST | — | 200 `{ stopped }` | Stop and clear queue |
 
 **Error handling:**
-- 400: Bad request (missing required fields)
+- 400: Bad request (missing required fields, e.g., empty text on `/api/speak`)
 - 202 Accepted: Request queued (not yet played)
+- 200 OK with `{ queued: false }`: `/api/speak-selection` when no text is selected
 
 ---
 
