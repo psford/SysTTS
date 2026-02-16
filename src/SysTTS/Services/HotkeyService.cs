@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using System.Windows.Forms;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using SysTTS.Forms;
 using SysTTS.Interop;
 using SysTTS.Settings;
 
@@ -14,7 +15,7 @@ namespace SysTTS.Services;
 /// - Start() reads Hotkeys config, installs WH_KEYBOARD_LL hook
 /// - Hook callback dispatches to Task.Run for processing (returns within 1000ms)
 /// - Direct mode: capture text via ClipboardService, send to SpeechService
-/// - Picker mode: log "not yet implemented" (Phase 5)
+/// - Picker mode: show voice picker, let user select voice, then speak with selected voice
 /// - Always CallNextHookEx to pass events to other hooks
 /// - Stores delegate reference to prevent GC
 /// - Implements IDisposable for cleanup
@@ -25,6 +26,8 @@ public class HotkeyService : IDisposable
     private readonly IClipboardService _clipboardService;
     private readonly ISpeechService _speechService;
     private readonly ILogger<HotkeyService> _logger;
+    private readonly IVoiceManager _voiceManager;
+    private readonly UserPreferences _userPreferences;
 
     private nint _hookHandle = nint.Zero;
     private NativeMethods.LowLevelKeyboardProc? _keyboardProc;
@@ -34,12 +37,16 @@ public class HotkeyService : IDisposable
         IConfiguration configuration,
         IClipboardService clipboardService,
         ISpeechService speechService,
-        ILogger<HotkeyService> logger)
+        ILogger<HotkeyService> logger,
+        IVoiceManager voiceManager,
+        UserPreferences userPreferences)
     {
         _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         _clipboardService = clipboardService ?? throw new ArgumentNullException(nameof(clipboardService));
         _speechService = speechService ?? throw new ArgumentNullException(nameof(speechService));
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
+        _voiceManager = voiceManager ?? throw new ArgumentNullException(nameof(voiceManager));
+        _userPreferences = userPreferences ?? throw new ArgumentNullException(nameof(userPreferences));
     }
 
     /// <summary>
@@ -216,8 +223,8 @@ public class HotkeyService : IDisposable
         }
         else if (hotkey.Mode.Equals("picker", StringComparison.OrdinalIgnoreCase))
         {
-            // Picker mode: not yet implemented (Phase 5)
-            _logger.LogInformation("Picker mode not yet implemented");
+            // Picker mode: show voice picker after capturing text
+            await ProcessPickerModeAsync(hotkey);
         }
         else
         {
@@ -254,6 +261,118 @@ public class HotkeyService : IDisposable
         else
         {
             _logger.LogWarning("Failed to queue hotkey speech request");
+        }
+    }
+
+    /// <summary>
+    /// Processes picker-mode hotkey: captures selected text, shows voice picker, speaks with selected voice.
+    ///
+    /// Flow:
+    /// 1. Capture text via ClipboardService (AC3.2)
+    /// 2. If no text, return (AC3.7)
+    /// 3. Load last-used voice from UserPreferences (AC3.5)
+    /// 4. Get available voices from VoiceManager
+    /// 5. Show VoicePickerForm on UI thread with last-used voice pre-selected (AC3.2)
+    /// 6. If user selects a voice:
+    ///    - Save selected voice to UserPreferences (AC3.5)
+    ///    - Send text to SpeechService with selected voice (AC3.3)
+    /// 7. If user dismisses (Escape or click-away):
+    ///    - Do nothing, no side effects (AC3.6)
+    /// </summary>
+    private async Task ProcessPickerModeAsync(HotkeySettings hotkey)
+    {
+        try
+        {
+            // Step 1: Capture selected text (AC3.2)
+            var selectedText = await _clipboardService.CaptureSelectedTextAsync();
+
+            // Step 2: If no text selected, return (AC3.7)
+            if (string.IsNullOrWhiteSpace(selectedText))
+            {
+                _logger.LogDebug("No text selected for picker mode, skipping");
+                return;
+            }
+
+            // Step 3: Load last-used voice from UserPreferences (AC3.5)
+            var lastUsedVoice = _userPreferences.LastUsedPickerVoice;
+            _logger.LogDebug("Loaded last-used voice: {Voice}", lastUsedVoice ?? "none");
+
+            // Step 4: Get available voices
+            var availableVoices = _voiceManager.GetAvailableVoices();
+            if (availableVoices.Count == 0)
+            {
+                _logger.LogWarning("No voices available for picker mode");
+                return;
+            }
+
+            // Step 5: Show VoicePickerForm on UI thread (AC3.2)
+            // The form is already created and shown on the calling thread from the hook.
+            // We need to marshal the ShowDialog() call to the main UI thread.
+            string? selectedVoiceId = null;
+
+            // Use Application.OpenForms[0] to get the main form's UI context.
+            // If no forms exist, we cannot show the picker (this shouldn't happen in normal use).
+            if (Application.OpenForms.Count > 0)
+            {
+                var mainForm = Application.OpenForms[0];
+                if (mainForm != null)
+                {
+                    var invokeResult = mainForm.Invoke(new Func<string?>(() =>
+                    {
+                        using (var pickerForm = new VoicePickerForm(availableVoices, lastUsedVoice))
+                        {
+                            var dialogResult = pickerForm.ShowDialog();
+                            return dialogResult == DialogResult.OK ? pickerForm.SelectedVoiceId : null;
+                        }
+                    }));
+                    selectedVoiceId = invokeResult as string;
+                }
+                else
+                {
+                    _logger.LogWarning("Main form is null despite OpenForms.Count > 0");
+                    return;
+                }
+            }
+            else
+            {
+                _logger.LogWarning("No main form available to show voice picker");
+                return;
+            }
+
+            // Step 6: Process the result
+            if (!string.IsNullOrEmpty(selectedVoiceId))
+            {
+                // User selected a voice (AC3.3)
+                // Step 6a: Save selected voice to UserPreferences (AC3.5)
+                _userPreferences.LastUsedPickerVoice = selectedVoiceId;
+                _userPreferences.Save();
+                _logger.LogDebug("Saved selected voice to preferences: {Voice}", selectedVoiceId);
+
+                // Step 6b: Send text to SpeechService with selected voice (AC3.3)
+                var (queued, requestId) = _speechService.ProcessSpeakRequest(
+                    selectedText,
+                    "hotkey-picker",
+                    selectedVoiceId);
+
+                if (queued)
+                {
+                    _logger.LogInformation("Picker mode speech request queued: {RequestId} with voice {Voice}",
+                        requestId, selectedVoiceId);
+                }
+                else
+                {
+                    _logger.LogWarning("Failed to queue picker mode speech request");
+                }
+            }
+            else
+            {
+                // User dismissed the picker (AC3.6)
+                _logger.LogDebug("Picker form dismissed, no speech request sent");
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Error in picker mode handler");
         }
     }
 
