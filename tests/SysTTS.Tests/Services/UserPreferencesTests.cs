@@ -46,10 +46,7 @@ public class UserPreferencesTests : IDisposable
     {
         // Arrange
         var prefs = new UserPreferences(_preferencesFilePath);
-        prefs.LastUsedPickerVoice = "voice-123";
-
-        // Act
-        prefs.Save();
+        prefs.SetLastUsedPickerVoice("voice-123");
 
         // Assert
         File.Exists(_preferencesFilePath).Should().BeTrue();
@@ -62,8 +59,7 @@ public class UserPreferencesTests : IDisposable
     {
         // Arrange
         var prefs1 = new UserPreferences(_preferencesFilePath);
-        prefs1.LastUsedPickerVoice = "voice-456";
-        prefs1.Save();
+        prefs1.SetLastUsedPickerVoice("voice-456");
 
         // Act
         var prefs2 = new UserPreferences(_preferencesFilePath);
@@ -85,8 +81,7 @@ public class UserPreferencesTests : IDisposable
             int voiceIndex = i;
             tasks.Add(Task.Run(() =>
             {
-                prefs.LastUsedPickerVoice = $"voice-{voiceIndex}";
-                prefs.Save();
+                prefs.SetLastUsedPickerVoice($"voice-{voiceIndex}");
             }));
         }
 
@@ -106,13 +101,30 @@ public class UserPreferencesTests : IDisposable
     {
         // Arrange
         var prefs1 = new UserPreferences(_preferencesFilePath);
-        prefs1.LastUsedPickerVoice = "voice-789";
-        prefs1.Save();
+        prefs1.SetLastUsedPickerVoice("voice-789");
 
         // Act - Load into a new instance
         var prefs2 = new UserPreferences(_preferencesFilePath);
 
         // Assert - LastUsedPickerVoice should be loaded from file
         prefs2.LastUsedPickerVoice.Should().Be("voice-789");
+    }
+
+    [Fact]
+    public void SetLastUsedPickerVoice_SavesAndPersists_AtomicallyUnderLock()
+    {
+        // Arrange
+        var prefs = new UserPreferences(_preferencesFilePath);
+
+        // Act
+        prefs.SetLastUsedPickerVoice("voice-atomic");
+
+        // Assert - Verify both in-memory and persisted state
+        prefs.LastUsedPickerVoice.Should().Be("voice-atomic");
+        File.Exists(_preferencesFilePath).Should().BeTrue();
+
+        // Load from disk to verify persistence
+        var prefs2 = new UserPreferences(_preferencesFilePath);
+        prefs2.LastUsedPickerVoice.Should().Be("voice-atomic");
     }
 }

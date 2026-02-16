@@ -14,7 +14,7 @@ public class HotkeySettings
     /// <summary>
     /// The hotkey mode: "direct" or "picker".
     /// - direct: Immediately capture selected text and speak with configured voice.
-    /// - picker: Not yet implemented (Phase 5).
+    /// - picker: Show voice picker popup, let user select voice, then speak with selected voice.
     /// </summary>
     public string Mode { get; set; } = "direct";
 

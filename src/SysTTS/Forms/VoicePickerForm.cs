@@ -18,6 +18,7 @@ public partial class VoicePickerForm : Form
 
     private readonly ListBox _voiceListBox;
     private readonly string? _lastUsedVoiceId;
+    private bool _isReady;
 
     public string? SelectedVoiceId { get; private set; }
 
@@ -74,6 +75,7 @@ public partial class VoicePickerForm : Form
         _voiceListBox.KeyDown += VoiceListBox_KeyDown;
         KeyDown += VoicePickerForm_KeyDown;
         Deactivate += VoicePickerForm_Deactivate;
+        Shown += VoicePickerForm_Shown;
 
         // Position near cursor
         PositionNearCursor();
@@ -147,11 +149,24 @@ public partial class VoicePickerForm : Form
 
     /// <summary>
     /// Handles form deactivation (click outside).
+    /// Only close if the form has been fully shown (_isReady is true) to avoid
+    /// closing the form prematurely during initialization when other windows may take focus.
     /// </summary>
     private void VoicePickerForm_Deactivate(object? sender, EventArgs e)
     {
-        DialogResult = DialogResult.Cancel;
-        Close();
+        if (_isReady)
+        {
+            DialogResult = DialogResult.Cancel;
+            Close();
+        }
+    }
+
+    /// <summary>
+    /// Handles the Shown event to mark the form as ready for deactivation handling.
+    /// </summary>
+    private void VoicePickerForm_Shown(object? sender, EventArgs e)
+    {
+        _isReady = true;
     }
 
     /// <summary>

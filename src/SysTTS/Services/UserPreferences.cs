@@ -15,8 +15,10 @@ public class UserPreferences
 
     /// <summary>
     /// Last-used voice ID in picker mode. Null if not yet set.
+    /// This property is read-only for external code. Use SetLastUsedPickerVoice() to safely
+    /// set the value and save to disk within a lock.
     /// </summary>
-    public string? LastUsedPickerVoice { get; set; }
+    public string? LastUsedPickerVoice { get; private set; }
 
     /// <summary>
     /// Creates a new UserPreferences instance with the default file path.
@@ -55,7 +57,7 @@ public class UserPreferences
                 }
 
                 var json = File.ReadAllText(_filePath);
-                var doc = JsonDocument.Parse(json);
+                using var doc = JsonDocument.Parse(json);
                 var root = doc.RootElement;
 
                 // Read LastUsedPickerVoice if present
@@ -104,6 +106,20 @@ public class UserPreferences
             {
                 _logger?.LogError(ex, "Failed to save user preferences to {FilePath}", _filePath);
             }
+        }
+    }
+
+    /// <summary>
+    /// Sets the last-used voice ID and saves to disk atomically within a lock.
+    /// This ensures thread-safe read/write of the property with persistence.
+    /// </summary>
+    /// <param name="voiceId">The voice ID to save, or null to clear</param>
+    public void SetLastUsedPickerVoice(string? voiceId)
+    {
+        lock (_lock)
+        {
+            LastUsedPickerVoice = voiceId;
+            Save();
         }
     }
 

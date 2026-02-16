@@ -28,6 +28,7 @@ public class HotkeyService : IDisposable
     private readonly ILogger<HotkeyService> _logger;
     private readonly IVoiceManager _voiceManager;
     private readonly UserPreferences _userPreferences;
+    private readonly SynchronizationContext _syncContext;
 
     private nint _hookHandle = nint.Zero;
     private NativeMethods.LowLevelKeyboardProc? _keyboardProc;
@@ -39,7 +40,8 @@ public class HotkeyService : IDisposable
         ISpeechService speechService,
         ILogger<HotkeyService> logger,
         IVoiceManager voiceManager,
-        UserPreferences userPreferences)
+        UserPreferences userPreferences,
+        SynchronizationContext syncContext)
     {
         _configuration = configuration ?? throw new ArgumentNullException(nameof(configuration));
         _clipboardService = clipboardService ?? throw new ArgumentNullException(nameof(clipboardService));
@@ -47,6 +49,7 @@ public class HotkeyService : IDisposable
         _logger = logger ?? throw new ArgumentNullException(nameof(logger));
         _voiceManager = voiceManager ?? throw new ArgumentNullException(nameof(voiceManager));
         _userPreferences = userPreferences ?? throw new ArgumentNullException(nameof(userPreferences));
+        _syncContext = syncContext ?? throw new ArgumentNullException(nameof(syncContext));
     }
 
     /// <summary>
@@ -279,7 +282,7 @@ public class HotkeyService : IDisposable
     /// 7. If user dismisses (Escape or click-away):
     ///    - Do nothing, no side effects (AC3.6)
     /// </summary>
-    private async Task ProcessPickerModeAsync(HotkeySettings hotkey)
+    internal async Task ProcessPickerModeAsync(HotkeySettings hotkey)
     {
         try
         {
@@ -306,46 +309,38 @@ public class HotkeyService : IDisposable
             }
 
             // Step 5: Show VoicePickerForm on UI thread (AC3.2)
-            // The form is already created and shown on the calling thread from the hook.
-            // We need to marshal the ShowDialog() call to the main UI thread.
+            // Marshal the ShowDialog() call to the main UI thread using SynchronizationContext.
+            // The sync context was captured from the STA thread during startup in Program.cs.
             string? selectedVoiceId = null;
 
-            // Use Application.OpenForms[0] to get the main form's UI context.
-            // If no forms exist, we cannot show the picker (this shouldn't happen in normal use).
-            if (Application.OpenForms.Count > 0)
+            // Use SynchronizationContext to marshal to the UI thread
+            var showPickerWaitHandle = new ManualResetEventSlim(false);
+            _syncContext.Send(_ =>
             {
-                var mainForm = Application.OpenForms[0];
-                if (mainForm != null)
+                try
                 {
-                    var invokeResult = mainForm.Invoke(new Func<string?>(() =>
+                    using (var pickerForm = new VoicePickerForm(availableVoices, lastUsedVoice))
                     {
-                        using (var pickerForm = new VoicePickerForm(availableVoices, lastUsedVoice))
-                        {
-                            var dialogResult = pickerForm.ShowDialog();
-                            return dialogResult == DialogResult.OK ? pickerForm.SelectedVoiceId : null;
-                        }
-                    }));
-                    selectedVoiceId = invokeResult as string;
+                        var dialogResult = pickerForm.ShowDialog();
+                        selectedVoiceId = dialogResult == DialogResult.OK ? pickerForm.SelectedVoiceId : null;
+                    }
                 }
-                else
+                finally
                 {
-                    _logger.LogWarning("Main form is null despite OpenForms.Count > 0");
-                    return;
+                    showPickerWaitHandle.Set();
                 }
-            }
-            else
-            {
-                _logger.LogWarning("No main form available to show voice picker");
-                return;
-            }
+            }, null);
+
+            // Wait for the picker to complete
+            showPickerWaitHandle.Wait();
+            showPickerWaitHandle.Dispose();
 
             // Step 6: Process the result
             if (!string.IsNullOrEmpty(selectedVoiceId))
             {
                 // User selected a voice (AC3.3)
                 // Step 6a: Save selected voice to UserPreferences (AC3.5)
-                _userPreferences.LastUsedPickerVoice = selectedVoiceId;
-                _userPreferences.Save();
+                _userPreferences.SetLastUsedPickerVoice(selectedVoiceId);
                 _logger.LogDebug("Saved selected voice to preferences: {Voice}", selectedVoiceId);
 
                 // Step 6b: Send text to SpeechService with selected voice (AC3.3)

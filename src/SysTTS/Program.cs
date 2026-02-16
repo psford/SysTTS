@@ -32,6 +32,11 @@ static class Program
         // Register Clipboard and Hotkey services
         builder.Services.AddSingleton<IClipboardService, ClipboardService>();
         builder.Services.AddSingleton<UserPreferences>();
+
+        // Capture the STA UI thread SynchronizationContext before Application.Run
+        // This context will be available to HotkeyService for marshaling UI operations
+        var syncContext = SynchronizationContext.Current;
+        builder.Services.AddSingleton<SynchronizationContext>(syncContext ?? throw new InvalidOperationException("SynchronizationContext.Current is null"));
         builder.Services.AddSingleton<HotkeyService>();
 
         // Read port from config and bind Kestrel to localhost only
