@@ -16,12 +16,13 @@
   "author": "Patrick Ford",
   "license": "MIT",
   "dependencies": {
-    "@elgato/streamdeck": "^2.2.0"
+    "@elgato/streamdeck": "^2.0.0"
   },
   "devDependencies": {
     "@rollup/plugin-node-resolve": "^15.0.0",
     "@rollup/plugin-typescript": "^11.1.0",
     "rollup": "^4.9.0",
+    "tslib": "^2.6.0",
     "typescript": "^5.3.0"
   }
 }

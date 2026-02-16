@@ -8,7 +8,7 @@ export default {
     format: 'esm',
     sourcemap: true
   },
-  external: ['path', 'fs', 'os', 'url'],
+  external: ['path', 'fs', 'os', 'url', 'ws'],
   plugins: [
     typescript({
       tsconfig: './tsconfig.json'
