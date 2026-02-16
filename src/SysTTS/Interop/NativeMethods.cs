@@ -94,8 +94,10 @@ public static class NativeMethods
     /// <summary>
     /// Contains information about an input event.
     /// Uses explicit layout for union-like behavior.
+    /// Size must be 40 bytes on x64 (type + 4 padding + ki[32 bytes] = 40).
+    /// Win32 SendInput validates cbSize and silently fails if size doesn't match.
     /// </summary>
-    [StructLayout(LayoutKind.Explicit)]
+    [StructLayout(LayoutKind.Explicit, Size = 40)]
     public struct INPUT
     {
         /// <summary>

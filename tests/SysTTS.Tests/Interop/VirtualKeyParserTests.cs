@@ -98,7 +98,7 @@ public class VirtualKeyParserTests
     {
         // Arrange
         var keyStringLower = "f23";
-        var keyStringMixed = "F23";
+        var keyStringMixed = "f23";
         var keyStringUpper = "F23";
 
         // Act

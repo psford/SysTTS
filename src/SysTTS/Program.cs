@@ -110,9 +110,11 @@ static class Program
             var hotkeyService = app.Services.GetRequiredService<HotkeyService>();
             hotkeyService.Stop();
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // Log but don't fail shutdown (error will be logged by HotkeyService.Stop())
+            var loggerFactory = app.Services.GetRequiredService<ILoggerFactory>();
+            var logger = loggerFactory.CreateLogger("SysTTS.Program");
+            logger.LogDebug(ex, "Error stopping HotkeyService during shutdown");
         }
 
         // Wait for Kestrel to stop after WinForms exits

@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using System.Windows.Forms;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using SysTTS.Interop;
@@ -43,6 +44,7 @@ public class HotkeyService : IDisposable
 
     /// <summary>
     /// Starts the hotkey service by reading config and installing the keyboard hook.
+    /// Creates a dedicated thread with a message pump to install and maintain the hook.
     /// </summary>
     public void Start()
     {
@@ -87,22 +89,44 @@ public class HotkeyService : IDisposable
                 return;
             }
 
-            // Install the low-level keyboard hook
-            _keyboardProc = LowLevelKeyboardProc;
-            _hookHandle = NativeMethods.SetWindowsHookEx(
-                NativeMethods.WH_KEYBOARD_LL,
-                _keyboardProc,
-                NativeMethods.GetModuleHandle(null),
-                0);
-
-            if (_hookHandle == nint.Zero)
+            // Create a dedicated thread with a message pump to install and maintain the hook
+            // This ensures the hook callback is invoked, as WH_KEYBOARD_LL requires the
+            // installing thread to run a message loop.
+            var hookThread = new Thread(() =>
             {
-                _logger.LogError("Failed to install keyboard hook");
-                _keyboardProc = null;
-                return;
-            }
+                try
+                {
+                    // Install the low-level keyboard hook on this thread
+                    _keyboardProc = LowLevelKeyboardProc;
+                    _hookHandle = NativeMethods.SetWindowsHookEx(
+                        NativeMethods.WH_KEYBOARD_LL,
+                        _keyboardProc,
+                        NativeMethods.GetModuleHandle(null),
+                        0);
 
-            _logger.LogInformation("Keyboard hook installed successfully");
+                    if (_hookHandle == nint.Zero)
+                    {
+                        _logger.LogError("Failed to install keyboard hook");
+                        _keyboardProc = null;
+                        return;
+                    }
+
+                    _logger.LogInformation("Keyboard hook installed successfully");
+
+                    // Run message loop to process keyboard events
+                    Application.Run();
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error in keyboard hook thread");
+                }
+            })
+            {
+                Name = "HotkeyService-Hook",
+                IsBackground = true
+            };
+
+            hookThread.Start();
         }
         catch (Exception ex)
         {

@@ -44,7 +44,7 @@ public class ClipboardService : IClipboardService
             })
             {
                 Name = "ClipboardCapture-STA",
-                IsBackground = false
+                IsBackground = true
             };
 
             staThread.TrySetApartmentState(ApartmentState.STA);
@@ -109,7 +109,14 @@ public class ClipboardService : IClipboardService
             inputs[3].ki.dwFlags = NativeMethods.KEYEVENTF_KEYUP;
 
             uint sent = NativeMethods.SendInput((uint)inputs.Length, inputs, System.Runtime.InteropServices.Marshal.SizeOf<NativeMethods.INPUT>());
-            _logger.LogDebug("Sent {Count} input events for Ctrl+C simulation", sent);
+            if (sent != inputs.Length)
+            {
+                _logger.LogWarning("SendInput failed: sent {Sent} of {Expected} input events", sent, inputs.Length);
+            }
+            else
+            {
+                _logger.LogDebug("Sent {Count} input events for Ctrl+C simulation", sent);
+            }
 
             // Step 4: Wait for OS to process clipboard update
             Thread.Sleep(100);
