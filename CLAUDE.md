@@ -21,6 +21,10 @@ Claude Code development guidelines for the SysTTS project.
 
 ```
 SysTTS/
+├── CLAUDE.md                      # Project conventions and guidelines
+├── README.md                      # Quick start and feature overview
+├── SysTTS.sln                     # Solution file (src/ and tests/ folders)
+│
 ├── src/SysTTS/                    # Main WinForms + ASP.NET Core application
 │   ├── Program.cs                 # Entry point: host builder, endpoints
 │   ├── appsettings.json           # Configuration (port, voices, hotkeys, etc.)
@@ -35,6 +39,9 @@ SysTTS/
 │   │   └── ClipboardService.cs    # Clipboard save/restore, Ctrl+C simulation
 │   ├── Handlers/                  # HTTP request handlers
 │   │   └── SpeakSelectionHandler.cs # Clipboard integration for hotkeys
+│   ├── Interop/                   # Win32 P/Invoke declarations
+│   │   ├── NativeMethods.cs       # Win32 API declarations
+│   │   └── VirtualKeyParser.cs    # Virtual key code parsing
 │   ├── Models/                    # DTOs and data models
 │   ├── Settings/                  # Settings classes (ServiceSettings, AudioSettings)
 │   ├── Forms/                     # WinForms UI
@@ -46,13 +53,15 @@ SysTTS/
 │   └── *.cs                       # Test files
 │
 ├── streamdeck-plugin/             # Stream Deck plugin (TypeScript/Node.js)
+│   ├── .sdignore                  # Files to exclude from plugin package
 │   ├── package.json               # npm scripts
 │   ├── tsconfig.json
-│   ├── rollup.config.js           # Build configuration
+│   ├── rollup.config.mjs          # Build configuration
+│   ├── com.systts.sdPlugin/       # Plugin output directory
 │   └── src/                       # TypeScript source
 │       ├── index.ts               # Plugin entry point
 │       ├── actions/               # Stream Deck actions (Speak, Stop, etc.)
-│       └── utils/                 # API client, configuration helpers
+│       └── common/                # API client, configuration helpers
 │
 ├── voices/                        # Piper ONNX voice models (gitignored)
 │   ├── en_US-amy-medium.onnx
@@ -66,14 +75,11 @@ SysTTS/
 │   ├── download-models.ps1        # Download voice models from HuggingFace
 │   └── ...
 │
-├── docs/                          # Documentation
-│   ├── README.md                  # Quick start and feature overview
-│   ├── CUSTOM_VOICES.md           # Voice training and import guide
-│   ├── INTEGRATION.md             # API reference and integration examples
-│   ├── TECHNICAL_SPEC.md          # Architecture and implementation reference
-│   └── ...
-│
-└── SysTTS.sln                     # Solution file (src/ and tests/ folders)
+└── docs/                          # Documentation
+    ├── CUSTOM_VOICES.md           # Voice training and import guide
+    ├── INTEGRATION.md             # API reference and integration examples
+    ├── TECHNICAL_SPEC.md          # Architecture and implementation reference
+    └── ...
 ```
 
 ---

@@ -163,8 +163,8 @@ Once you have a trained model or downloaded a pre-built voice, follow these step
 Copy the `.onnx` and `.onnx.json` files to the `voices/` directory:
 
 ```bash
-cp my_voice.onnx ~/SysTTS/voices/
-cp my_voice.onnx.json ~/SysTTS/voices/
+cp my_voice.onnx voices/
+cp my_voice.onnx.json voices/
 ```
 
 VoiceManager will automatically scan and register the voice within seconds.

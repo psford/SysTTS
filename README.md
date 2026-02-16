@@ -31,7 +31,7 @@ This downloads the default voice (`en_US-amy-medium`, ~45 MB) and shared espeak-
 
 ### 3. Configure (Optional)
 
-Edit `appsettings.json` to customize:
+Edit `src/SysTTS/appsettings.json` to customize:
 
 ```json
 {

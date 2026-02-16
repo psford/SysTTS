@@ -102,12 +102,12 @@ List all available voices on the system.
 [
   {
     "id": "en_US-amy-medium",
-    "name": "Amy (US English, Medium Quality)",
+    "name": "en_US-amy-medium",
     "sampleRate": 22050
   },
   {
     "id": "en_GB-alba-medium",
-    "name": "Alba (UK English, Medium Quality)",
+    "name": "en_GB-alba-medium",
     "sampleRate": 22050
   }
 ]
