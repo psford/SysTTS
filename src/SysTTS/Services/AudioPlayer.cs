@@ -28,8 +28,19 @@ public class AudioPlayer : IAudioPlayer
             // Clamp sample to [-1.0, 1.0]
             float clamped = Math.Clamp(samples[i], -1.0f, 1.0f);
 
-            // Scale to int16 range and convert
-            short sample = (short)(clamped * (clamped < 0 ? short.MinValue : short.MaxValue));
+            // Scale to int16 range [-32768, 32767]
+            // Use absolute value approach: multiply by appropriate max, preserve sign
+            short sample;
+            if (clamped < 0)
+            {
+                // For negative values, multiply absolute value by 32768 and negate
+                sample = (short)(clamped * 32768f);
+            }
+            else
+            {
+                // For positive values, multiply by 32767
+                sample = (short)(clamped * 32767f);
+            }
 
             // Write as little-endian int16 (2 bytes)
             int byteIndex = i * 2;
