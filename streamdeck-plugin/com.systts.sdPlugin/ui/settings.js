@@ -6,32 +6,30 @@ let currentActionUUID = null;
 let currentSettings = {};
 
 /**
- * Initialize the Property Inspector when connected to Stream Deck
+ * Stream Deck calls this function automatically when loading the Property Inspector.
+ * This is the callback pattern used by Stream Deck SDK v2.
  */
-streamDeck.ui.onConnected(function () {
-  const actionUUID = document.querySelector('[data-uuid]')?.getAttribute('data-uuid');
-  currentActionUUID = actionUUID;
+function connectElgatoStreamDeckSocket(inPort, inPropertyInspectorUUID, inRegisterEvent, inInfo, inActionInfo) {
+  // Extract action UUID from the inActionInfo parameter
+  const actionInfo = JSON.parse(inActionInfo);
+  currentActionUUID = actionInfo.action;
 
   // Determine if this is the speak-text action
-  const isSpeakTextAction = actionUUID === SPEAK_TEXT_ACTION_UUID;
+  const isSpeakTextAction = currentActionUUID === SPEAK_TEXT_ACTION_UUID;
 
   // Show/hide text field based on action type
   const textSection = document.getElementById('text-section');
-  if (isSpeakTextAction) {
-    textSection.style.display = 'block';
-  } else {
-    textSection.style.display = 'none';
+  textSection.style.display = isSpeakTextAction ? 'block' : 'none';
+
+  // Load initial settings from actionInfo payload
+  if (actionInfo.payload && actionInfo.payload.settings) {
+    currentSettings = actionInfo.payload.settings;
+    updateUIFromSettings();
   }
 
-  // Load voices
+  // Load voices from API
   loadVoices();
-
-  // Get current settings for this action
-  streamDeck.ui.onDidReceiveSettings(function (jsn) {
-    currentSettings = jsn.settings || {};
-    updateUIFromSettings();
-  });
-});
+}
 
 /**
  * Load voices from the SysTTS API and populate the dropdown

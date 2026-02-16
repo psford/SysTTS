@@ -6,6 +6,7 @@ src/
 *.map
 
 # Configuration files
+package.json
 package-lock.json
 tsconfig.json
 rollup.config.mjs

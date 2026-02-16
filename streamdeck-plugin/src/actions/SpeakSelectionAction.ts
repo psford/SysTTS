@@ -2,9 +2,9 @@ import { SingletonAction, action } from "@elgato/streamdeck";
 import type { KeyDownEvent } from "@elgato/streamdeck";
 import { speakSelection } from "../common/api";
 
-interface Settings {
+type Settings = {
   voice?: string;
-}
+};
 
 /**
  * Speak Selected Text action

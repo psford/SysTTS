@@ -1,12 +1,14 @@
 import { streamDeck } from "@elgato/streamdeck";
 
+// BASE_URL defaults to localhost:5100 (matching SysTTS default service port).
+// If SysTTS runs on a different machine or port, this will need to be updated.
 const BASE_URL = "http://localhost:5100";
 
-export interface Voice {
+export type Voice = {
   id: string;
   name: string;
   sampleRate: number;
-}
+};
 
 /**
  * Speak the currently selected text in the system
@@ -16,9 +18,6 @@ export async function speakSelection(voice?: string): Promise<void> {
   try {
     const response = await fetch(`${BASE_URL}/api/speak-selection`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
       body: JSON.stringify({ voice }),
     });
 
@@ -68,9 +67,7 @@ export async function stopSpeaking(): Promise<void> {
   try {
     const response = await fetch(`${BASE_URL}/api/stop`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
+      body: JSON.stringify({}),
     });
 
     if (!response.ok) {
@@ -88,14 +85,14 @@ export async function stopSpeaking(): Promise<void> {
 /**
  * Get available voices from the SysTTS service
  * @returns Array of available voices
+ *
+ * Note: The response is trusted as it comes from the local SysTTS service.
+ * Validation is minimal since it's a trusted internal API.
  */
-export async function getVoices(): Promise<Voice[]> {
+export async function getVoices(): Promise<Array<Voice>> {
   try {
     const response = await fetch(`${BASE_URL}/api/voices`, {
       method: "GET",
-      headers: {
-        "Content-Type": "application/json",
-      },
     });
 
     if (!response.ok) {

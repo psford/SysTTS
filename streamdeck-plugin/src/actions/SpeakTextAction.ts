@@ -2,10 +2,10 @@ import { SingletonAction, action, streamDeck } from "@elgato/streamdeck";
 import type { KeyDownEvent } from "@elgato/streamdeck";
 import { speakText } from "../common/api";
 
-interface Settings {
+type Settings = {
   text?: string;
   voice?: string;
-}
+};
 
 /**
  * Speak Custom Text action
