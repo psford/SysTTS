@@ -31,6 +31,7 @@ static class Program
 
         // Register Clipboard and Hotkey services
         builder.Services.AddSingleton<IClipboardService, ClipboardService>();
+        builder.Services.AddSingleton<UserPreferences>();
         builder.Services.AddSingleton<HotkeyService>();
 
         // Read port from config and bind Kestrel to localhost only
