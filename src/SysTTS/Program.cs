@@ -58,6 +58,17 @@ static class Program
         app.MapGet("/api/voices", (IVoiceManager voiceManager) =>
             Results.Ok(voiceManager.GetAvailableVoices().Select(v => new { v.Id, v.Name, v.SampleRate })));
 
+        // Speak selection endpoint
+        app.MapPost("/api/speak-selection", async (SpeakSelectionRequestDto request, IClipboardService clipboard, ISpeechService speechService) =>
+        {
+            var text = await clipboard.CaptureSelectedTextAsync();
+            if (string.IsNullOrWhiteSpace(text))
+                return Results.Ok(new { queued = false, text = "" });
+
+            var (queued, id) = speechService.ProcessSpeakRequest(text, "speak-selection", request.Voice);
+            return Results.Accepted(value: new { queued, id, text });
+        });
+
         // Speak endpoint
         app.MapPost("/api/speak", (SpeakRequestDto request, ISpeechService speechService) =>
         {
