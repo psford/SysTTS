@@ -1,0 +1,40 @@
+# Development and build artifacts
+node_modules/
+dist/
+src/
+*.ts
+*.map
+
+# Configuration files
+package-lock.json
+tsconfig.json
+rollup.config.mjs
+.eslintrc*
+.prettierrc*
+
+# Version control
+.git/
+.gitignore
+
+# IDE and editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+*.tmp
+
+# Testing and CI
+.github/
+.gitlab-ci.yml
+jest.config.js
+coverage/
+
+# Documentation
+README.md
+CHANGELOG.md
+docs/

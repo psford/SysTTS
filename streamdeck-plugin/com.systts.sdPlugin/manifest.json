@@ -1,0 +1,62 @@
+{
+  "Name": "SysTTS",
+  "Description": "Control system-level Text-to-Speech from Stream Deck",
+  "Version": "1.0.0",
+  "SDKVersion": 3,
+  "Author": "Patrick Ford",
+  "Icon": "images/plugin-icon",
+  "URL": "https://github.com/patrickford/systts",
+  "Category": "Utilities",
+  "CategoryIcon": "images/plugin-icon",
+  "CodePath": "bin/index.js",
+  "PropertyInspectorPath": "ui/settings.html",
+  "OS": [
+    {
+      "Platform": "windows",
+      "MinimumVersion": "10"
+    }
+  ],
+  "Actions": [
+    {
+      "UUID": "com.systts.plugin.speak-selection",
+      "Name": "Speak Selected Text",
+      "Icon": "images/speak-selection",
+      "States": [
+        {
+          "Image": "images/speak-selection",
+          "MultiActionImage": "images/speak-selection"
+        }
+      ],
+      "Controllers": ["Keypad"],
+      "PropertyInspectorPath": "ui/settings.html",
+      "SupportedInMultiActions": true
+    },
+    {
+      "UUID": "com.systts.plugin.speak-text",
+      "Name": "Speak Custom Text",
+      "Icon": "images/speak-text",
+      "States": [
+        {
+          "Image": "images/speak-text",
+          "MultiActionImage": "images/speak-text"
+        }
+      ],
+      "Controllers": ["Keypad"],
+      "PropertyInspectorPath": "ui/settings.html",
+      "SupportedInMultiActions": true
+    },
+    {
+      "UUID": "com.systts.plugin.stop-speaking",
+      "Name": "Stop Speaking",
+      "Icon": "images/stop-speaking",
+      "States": [
+        {
+          "Image": "images/stop-speaking",
+          "MultiActionImage": "images/stop-speaking"
+        }
+      ],
+      "Controllers": ["Keypad"],
+      "SupportedInMultiActions": true
+    }
+  ]
+}
