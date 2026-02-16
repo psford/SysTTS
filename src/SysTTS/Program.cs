@@ -47,12 +47,14 @@ static class Program
         if (completedTask == webTask)
         {
             // Kestrel failed before starting (e.g., port in use)
-            var ex = webTask.Exception?.InnerException;
+            // webTask is faulted, so get the exception
+            var ex = webTask.Exception?.InnerException ?? webTask.Exception;
             MessageBox.Show(
                 $"Failed to start HTTP server on port {serviceSettings.Port}:\n\n{ex?.Message}",
                 "SysTTS Error",
                 MessageBoxButtons.OK,
                 MessageBoxIcon.Error);
+            await app.DisposeAsync();
             return;
         }
 
@@ -69,6 +71,10 @@ static class Program
         catch (OperationCanceledException)
         {
             // Expected when CancellationTokenSource is cancelled on quit
+        }
+        finally
+        {
+            await app.DisposeAsync();
         }
     }
 }
