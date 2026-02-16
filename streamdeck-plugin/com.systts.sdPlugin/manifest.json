@@ -9,7 +9,6 @@
   "Category": "Utilities",
   "CategoryIcon": "images/plugin-icon",
   "CodePath": "bin/index.js",
-  "PropertyInspectorPath": "ui/settings.html",
   "OS": [
     {
       "Platform": "windows",

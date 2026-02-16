@@ -1,12 +1,18 @@
 using FluentAssertions;
 using Moq;
+using SysTTS.Handlers;
+using SysTTS.Models;
 using SysTTS.Services;
 
 namespace SysTTS.Tests;
 
 /// <summary>
-/// Tests for POST /api/speak-selection endpoint logic.
+/// Tests for POST /api/speak-selection endpoint handler.
 /// Verifies AC3.8: /api/speak-selection captures selected text server-side and queues speech.
+///
+/// These tests exercise the ACTUAL endpoint handler logic via SpeakSelectionHandler.Handle(),
+/// not mock behavior. They verify the handler calls dependencies with correct parameters
+/// and handles edge cases properly.
 /// </summary>
 public class SpeakSelectionEndpointTests
 {
@@ -20,54 +26,63 @@ public class SpeakSelectionEndpointTests
     }
 
     /// <summary>
-    /// AC3.8: When CaptureSelectedTextAsync returns null, endpoint returns 200 with { queued: false, text: "" }
+    /// AC3.8: When CaptureSelectedTextAsync returns null, handler should NOT queue
+    /// (verified by verifying speech service is NOT called)
     /// </summary>
     [Fact]
-    public async Task PostSpeakSelection_WhenTextIsNull_ReturnsOkWithQueuedFalse()
+    public async Task Handle_WhenTextIsNull_DoesNotCallSpeechService()
     {
         // Arrange
         _mockClipboard.Setup(c => c.CaptureSelectedTextAsync())
             .ReturnsAsync((string?)null);
 
-        // Act
-        var text = await _mockClipboard.Object.CaptureSelectedTextAsync();
+        var request = new SpeakSelectionRequestDto(null);
 
-        // Assert - should NOT queue when text is null
-        text.Should().BeNull();
+        // Act
+        var result = await SpeakSelectionHandler.Handle(request, _mockClipboard.Object, _mockSpeechService.Object);
+
+        // Assert - handler should return IResult (not null)
+        result.Should().NotBeNull();
 
         // Verify clipboard was called
         _mockClipboard.Verify(c => c.CaptureSelectedTextAsync(), Times.Once);
 
-        // Verify speech service was NOT called when text is null
+        // Verify speech service was NOT called when text is null (this is the core assertion)
         _mockSpeechService.Verify(s => s.ProcessSpeakRequest(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()),
             Times.Never);
     }
 
     /// <summary>
-    /// AC3.8: When CaptureSelectedTextAsync returns empty string, endpoint returns 200 with { queued: false, text: "" }
+    /// AC3.8: When CaptureSelectedTextAsync returns empty string, handler should NOT queue
     /// </summary>
     [Fact]
-    public async Task PostSpeakSelection_WhenTextIsEmpty_ReturnsOkWithQueuedFalse()
+    public async Task Handle_WhenTextIsEmpty_DoesNotCallSpeechService()
     {
         // Arrange
         _mockClipboard.Setup(c => c.CaptureSelectedTextAsync())
             .ReturnsAsync("");
 
+        var request = new SpeakSelectionRequestDto(null);
+
         // Act
-        var text = await _mockClipboard.Object.CaptureSelectedTextAsync();
+        var result = await SpeakSelectionHandler.Handle(request, _mockClipboard.Object, _mockSpeechService.Object);
 
-        // Assert - should NOT queue when text is empty
-        text.Should().Be("");
-        string.IsNullOrWhiteSpace(text).Should().BeTrue();
+        // Assert - handler should return IResult (not null)
+        result.Should().NotBeNull();
 
+        // Verify clipboard was called
         _mockClipboard.Verify(c => c.CaptureSelectedTextAsync(), Times.Once);
+
+        // Verify speech service was NOT called when text is empty
+        _mockSpeechService.Verify(s => s.ProcessSpeakRequest(It.IsAny<string>(), It.IsAny<string>(), It.IsAny<string>()),
+            Times.Never);
     }
 
     /// <summary>
-    /// AC3.8: When text is captured, endpoint returns 202 with { queued, id, text }
+    /// AC3.8: When text is captured, handler calls speech service to queue
     /// </summary>
     [Fact]
-    public async Task PostSpeakSelection_WhenTextIsCaptured_Returns202WithQueuedAndId()
+    public async Task Handle_WhenTextIsCaptured_CallsSpeechService()
     {
         // Arrange
         var capturedText = "Hello world";
@@ -80,17 +95,15 @@ public class SpeakSelectionEndpointTests
         _mockSpeechService.Setup(s => s.ProcessSpeakRequest(capturedText, "speak-selection", voice))
             .Returns((true, expectedId));
 
+        var request = new SpeakSelectionRequestDto(voice);
+
         // Act
-        var text = await _mockClipboard.Object.CaptureSelectedTextAsync();
-        var (queued, id) = _mockSpeechService.Object.ProcessSpeakRequest(text!, "speak-selection", voice);
+        var result = await SpeakSelectionHandler.Handle(request, _mockClipboard.Object, _mockSpeechService.Object);
 
-        // Assert
-        text.Should().Be(capturedText);
-        string.IsNullOrWhiteSpace(text).Should().BeFalse();
+        // Assert - handler should return IResult (not null)
+        result.Should().NotBeNull();
 
-        queued.Should().BeTrue();
-        id.Should().Be(expectedId);
-
+        // Verify correct parameters were passed to dependencies
         _mockClipboard.Verify(c => c.CaptureSelectedTextAsync(), Times.Once);
         _mockSpeechService.Verify(s => s.ProcessSpeakRequest(capturedText, "speak-selection", voice), Times.Once);
     }
@@ -99,7 +112,7 @@ public class SpeakSelectionEndpointTests
     /// AC3.8: Voice override is passed through correctly to ProcessSpeakRequest
     /// </summary>
     [Fact]
-    public async Task PostSpeakSelection_WithVoiceOverride_PassesThroughCorrectly()
+    public async Task Handle_WithVoiceOverride_PassesThroughToSpeechService()
     {
         // Arrange
         var capturedText = "Test text";
@@ -112,22 +125,25 @@ public class SpeakSelectionEndpointTests
         _mockSpeechService.Setup(s => s.ProcessSpeakRequest(capturedText, "speak-selection", voice))
             .Returns((true, expectedId));
 
+        var request = new SpeakSelectionRequestDto(voice);
+
         // Act
-        var text = await _mockClipboard.Object.CaptureSelectedTextAsync();
-        var (queued, id) = _mockSpeechService.Object.ProcessSpeakRequest(text!, "speak-selection", voice);
+        var result = await SpeakSelectionHandler.Handle(request, _mockClipboard.Object, _mockSpeechService.Object);
 
-        // Assert - voice override should be passed through
-        queued.Should().BeTrue();
-        id.Should().Be(expectedId);
+        // Assert - handler should return IResult
+        result.Should().NotBeNull();
 
-        _mockSpeechService.Verify(s => s.ProcessSpeakRequest(capturedText, "speak-selection", voice), Times.Once);
+        // Verify correct voice was passed to speech service
+        _mockSpeechService.Verify(
+            s => s.ProcessSpeakRequest(capturedText, "speak-selection", voice),
+            Times.Once);
     }
 
     /// <summary>
     /// AC3.8: Text captured without voice override passes null voice to ProcessSpeakRequest
     /// </summary>
     [Fact]
-    public async Task PostSpeakSelection_WithoutVoiceOverride_PassesNullVoice()
+    public async Task Handle_WithoutVoiceOverride_PassesNullVoiceToSpeechService()
     {
         // Arrange
         var capturedText = "Another test";
@@ -139,22 +155,25 @@ public class SpeakSelectionEndpointTests
         _mockSpeechService.Setup(s => s.ProcessSpeakRequest(capturedText, "speak-selection", null))
             .Returns((true, expectedId));
 
+        var request = new SpeakSelectionRequestDto(null);
+
         // Act
-        var text = await _mockClipboard.Object.CaptureSelectedTextAsync();
-        var (queued, id) = _mockSpeechService.Object.ProcessSpeakRequest(text!, "speak-selection", null);
+        var result = await SpeakSelectionHandler.Handle(request, _mockClipboard.Object, _mockSpeechService.Object);
 
-        // Assert - should use default voice when voice override is not provided
-        queued.Should().BeTrue();
-        id.Should().Be(expectedId);
+        // Assert - handler should return IResult
+        result.Should().NotBeNull();
 
-        _mockSpeechService.Verify(s => s.ProcessSpeakRequest(capturedText, "speak-selection", null), Times.Once);
+        // Verify null voice was passed to speech service
+        _mockSpeechService.Verify(
+            s => s.ProcessSpeakRequest(capturedText, "speak-selection", null),
+            Times.Once);
     }
 
     /// <summary>
-    /// AC3.8: Source is always "speak-selection" in the endpoint call
+    /// AC3.8: Source is always "speak-selection" in the handler call (hardcoded, not from request)
     /// </summary>
     [Fact]
-    public async Task PostSpeakSelection_AlwaysUsesSourceIdentifier()
+    public async Task Handle_AlwaysUsesSourceIdentifier_Hardcoded()
     {
         // Arrange
         var capturedText = "Source test";
@@ -163,15 +182,25 @@ public class SpeakSelectionEndpointTests
         _mockClipboard.Setup(c => c.CaptureSelectedTextAsync())
             .ReturnsAsync(capturedText);
 
-        _mockSpeechService.Setup(s => s.ProcessSpeakRequest(capturedText, "speak-selection", null))
+        _mockSpeechService.Setup(s => s.ProcessSpeakRequest(It.IsAny<string>(), "speak-selection", null))
             .Returns((true, expectedId));
 
-        // Act
-        var text = await _mockClipboard.Object.CaptureSelectedTextAsync();
-        var (queued, id) = _mockSpeechService.Object.ProcessSpeakRequest(text!, "speak-selection", null);
+        var request = new SpeakSelectionRequestDto(null);
 
-        // Assert - source must always be "speak-selection" for this endpoint
-        _mockSpeechService.Verify(s => s.ProcessSpeakRequest(It.IsAny<string>(), "speak-selection", It.IsAny<string>()),
+        // Act
+        var result = await SpeakSelectionHandler.Handle(request, _mockClipboard.Object, _mockSpeechService.Object);
+
+        // Assert - handler should return IResult
+        result.Should().NotBeNull();
+
+        // Verify EXACT source value is always "speak-selection"
+        _mockSpeechService.Verify(
+            s => s.ProcessSpeakRequest(capturedText, "speak-selection", It.IsAny<string>()),
             Times.Once);
+
+        // Verify it wasn't called with any other source
+        _mockSpeechService.Verify(
+            s => s.ProcessSpeakRequest(It.IsAny<string>(), It.IsNotIn("speak-selection"), It.IsAny<string>()),
+            Times.Never);
     }
 }

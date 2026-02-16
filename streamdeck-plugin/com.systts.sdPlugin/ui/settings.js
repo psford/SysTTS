@@ -4,12 +4,41 @@ const API_BASE_URL = "http://localhost:5100";
 
 let currentActionUUID = null;
 let currentSettings = {};
+let websocket = null;
+let websocketUUID = null;
+let websocketRegistrationEvent = null;
 
 /**
  * Stream Deck calls this function automatically when loading the Property Inspector.
  * This is the callback pattern used by Stream Deck SDK v2.
  */
 function connectElgatoStreamDeckSocket(inPort, inPropertyInspectorUUID, inRegisterEvent, inInfo, inActionInfo) {
+  // Store UUID and registration event for WebSocket
+  websocketUUID = inPropertyInspectorUUID;
+  websocketRegistrationEvent = inRegisterEvent;
+
+  // Open WebSocket connection
+  websocket = new WebSocket('ws://127.0.0.1:' + inPort);
+
+  websocket.onopen = function () {
+    // Register with Stream Deck
+    websocket.send(JSON.stringify({ event: inRegisterEvent, uuid: inPropertyInspectorUUID }));
+  };
+
+  websocket.onmessage = function (evt) {
+    const data = JSON.parse(evt.data);
+    if (data.event === 'didReceiveSettings') {
+      if (data.payload && data.payload.settings) {
+        currentSettings = data.payload.settings;
+        updateUIFromSettings();
+      }
+    }
+  };
+
+  websocket.onerror = function (error) {
+    console.error('WebSocket error:', error);
+  };
+
   // Extract action UUID from the inActionInfo parameter
   const actionInfo = JSON.parse(inActionInfo);
   currentActionUUID = actionInfo.action;
@@ -97,6 +126,21 @@ function updateUIFromSettings() {
 }
 
 /**
+ * Save settings via WebSocket
+ */
+function saveSettings(settings) {
+  if (websocket && websocket.readyState === WebSocket.OPEN) {
+    websocket.send(JSON.stringify({
+      event: 'setSettings',
+      context: websocketUUID,
+      payload: settings
+    }));
+  } else {
+    console.warn('WebSocket not ready, cannot save settings');
+  }
+}
+
+/**
  * Save settings when voice dropdown changes
  */
 document.getElementById('voice-select').addEventListener('change', function (e) {
@@ -105,7 +149,7 @@ document.getElementById('voice-select').addEventListener('change', function (e) 
     voice: e.target.value === '' ? undefined : e.target.value,
   };
 
-  streamDeck.ui.setSettings(newSettings);
+  saveSettings(newSettings);
   currentSettings = newSettings;
 });
 
@@ -118,6 +162,6 @@ document.getElementById('text-input').addEventListener('change', function (e) {
     text: e.target.value,
   };
 
-  streamDeck.ui.setSettings(newSettings);
+  saveSettings(newSettings);
   currentSettings = newSettings;
 });
