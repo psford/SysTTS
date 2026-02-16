@@ -1,6 +1,6 @@
 # CLAUDE.md — SysTTS Project Conventions
 
-> Last verified: 2026-02-15
+> Last verified: 2026-02-16
 
 Claude Code development guidelines for the SysTTS project.
 
@@ -38,7 +38,7 @@ SysTTS/
 │   │   ├── SpeechQueue.cs         # Priority queue with serial processing
 │   │   ├── SpeechService.cs       # Source filtering, voice resolution
 │   │   ├── HotkeyService.cs       # Win32 keyboard hooks (dedicated thread)
-│   │   ├── ClipboardService.cs    # Clipboard save/restore, Ctrl+C simulation
+│   │   ├── ClipboardService.cs    # Clipboard save/restore, Ctrl+C simulation, OLE message pumping
 │   │   └── UserPreferences.cs     # Persists picker voice to user-preferences.json
 │   ├── Handlers/                  # HTTP request handlers
 │   │   └── SpeakSelectionHandler.cs # Clipboard integration for hotkeys
@@ -244,8 +244,8 @@ dotnet test tests/SysTTS.Tests/ /p:CollectCoverageData=true
 - Processing offloaded to `Task.Run()` to avoid blocking the 1000ms hook callback timeout
 - Delegate reference stored in field to prevent GC collection
 - Supports two modes:
-  - **Direct:** Immediately capture selected text via ClipboardService and speak with configured voice
-  - **Picker:** Capture text, show VoicePickerForm on STA thread (via SynchronizationContext), speak with selected voice
+  - **Direct:** Immediately capture selected text via ClipboardService and speak with last-picked voice (falls back to configured voice if no picker selection has been made)
+  - **Picker:** Capture text, show VoicePickerForm on STA thread (via SynchronizationContext), speak with selected voice; saves selection to UserPreferences for both picker and direct mode
 
 ### Sherpa-ONNX & NAudio
 

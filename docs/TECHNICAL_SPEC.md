@@ -1,7 +1,7 @@
 # SysTTS Technical Specification
 
-**Document Version:** 1.0
-**Last Updated:** 2026-02-15
+**Document Version:** 1.1
+**Last Updated:** 2026-02-16
 **Status:** Final Implementation
 
 ---
@@ -99,7 +99,7 @@ SysTTS is a system-level text-to-speech service composed of layered components: 
 │  │ ClipboardService (Clipboard Access)                                  │   │
 │  │ - Ctrl+C simulation via SendInput                                    │   │
 │  │ - Clipboard save/restore                                             │   │
-│  │ - STA thread marshaling for clipboard operations                     │   │
+│  │ - Dedicated STA thread with OLE message pumping                     │   │
 │  └──────────────────────────────────────────────────────────────────────┘   │
 └─────────────────────────────────────────────────────────────────────────────┘
 
@@ -158,7 +158,8 @@ SysTTS is a system-level text-to-speech service composed of layered components: 
 4. ProcessDirectModeAsync():
    - Calls `ClipboardService.CaptureSelectedTextAsync()` (same as speak-selection)
    - If text is empty, returns early (no speech)
-   - Calls `SpeechService.ProcessSpeakRequest(text, "hotkey", hotkey.Voice)`
+   - Resolves voice: `UserPreferences.LastUsedPickerVoice ?? hotkey.Voice` (picker selection persists to direct mode)
+   - Calls `SpeechService.ProcessSpeakRequest(text, "hotkey", resolvedVoice)`
 5. Speech processing proceeds as per 2.1
 
 ### 2.4 Hotkey Picker Mode
@@ -249,6 +250,7 @@ public record VoiceInfo(
     string Name,            // same as Id (can be enhanced with metadata)
     string ModelPath,       // full path to .onnx file
     string ConfigPath,      // full path to .onnx.json file
+    string TokensPath,      // full path to generated .tokens.txt file
     int SampleRate          // parsed from .onnx.json audio.sample_rate
 );
 ```
@@ -372,7 +374,7 @@ public class SourceSettings
   - Check if VK code is registered
   - Offload to `Task.Run` → `ProcessHotkeyAsync()` (must return within 1000ms)
   - Call `CallNextHookEx()` to pass event to next hook
-- `ProcessDirectModeAsync()`: capture text → SpeechService.ProcessSpeakRequest(text, "hotkey", hotkey.Voice)
+- `ProcessDirectModeAsync()`: capture text → resolve voice (UserPreferences.LastUsedPickerVoice ?? hotkey.Voice) → SpeechService.ProcessSpeakRequest(text, "hotkey", resolvedVoice)
 - `ProcessPickerModeAsync()`:
   - Capture text
   - Load last-used voice from UserPreferences
@@ -411,16 +413,21 @@ public class HotkeySettings
 
 **Key Responsibilities:**
 - `CaptureSelectedTextAsync()`:
+  - Spawn a dedicated STA thread (`ClipboardCapture-STA`) for clipboard operations
   - Save current clipboard content
+  - Clear clipboard
   - Simulate Ctrl+C via `SendInput` to copy selected text
-  - Read clipboard
+  - Pump Windows messages via `Application.DoEvents()` in a 300ms loop (25ms intervals)
+    - Required for Electron apps (VS Code, Slack) and browsers (Firefox, Chrome) that use OLE delayed rendering
+    - Without message pumping, clipboard data is not available from these applications
+  - Read clipboard text
   - Restore original clipboard content
-  - Return text (or empty string if clipboard is empty)
-- Marshaling: runs on main STA thread for clipboard access (WinForms requirement)
+  - Return text (or null if clipboard is empty)
 
 **Dependencies:**
 - Win32 `SendInput` API for Ctrl+C simulation
-- WinForms clipboard access
+- WinForms `Clipboard` class (requires STA thread)
+- `Application.DoEvents()` for OLE message pumping
 
 ---
 
@@ -863,6 +870,7 @@ SpeechQueue (background task)
 | Version | Date | Changes |
 |---------|------|---------|
 | 1.0 | 2026-02-15 | Initial release: Phase 7 documentation. Complete architecture, data flow, component catalog, API contract, configuration schema, thread model. |
+| 1.1 | 2026-02-16 | Accuracy fixes: VoiceInfo TokensPath field, direct-mode voice preference fallback, ClipboardService OLE message pumping description. |
 
 ---
 
