@@ -314,26 +314,15 @@ public class HotkeyService : IDisposable
             string? selectedVoiceId = null;
 
             // Use SynchronizationContext to marshal to the UI thread
-            var showPickerWaitHandle = new ManualResetEventSlim(false);
+            // SynchronizationContext.Send() is synchronous and blocks until the callback completes
             _syncContext.Send(_ =>
             {
-                try
+                using (var pickerForm = new VoicePickerForm(availableVoices, lastUsedVoice))
                 {
-                    using (var pickerForm = new VoicePickerForm(availableVoices, lastUsedVoice))
-                    {
-                        var dialogResult = pickerForm.ShowDialog();
-                        selectedVoiceId = dialogResult == DialogResult.OK ? pickerForm.SelectedVoiceId : null;
-                    }
-                }
-                finally
-                {
-                    showPickerWaitHandle.Set();
+                    var dialogResult = pickerForm.ShowDialog();
+                    selectedVoiceId = dialogResult == DialogResult.OK ? pickerForm.SelectedVoiceId : null;
                 }
             }, null);
-
-            // Wait for the picker to complete
-            showPickerWaitHandle.Wait();
-            showPickerWaitHandle.Dispose();
 
             // Step 6: Process the result
             if (!string.IsNullOrEmpty(selectedVoiceId))

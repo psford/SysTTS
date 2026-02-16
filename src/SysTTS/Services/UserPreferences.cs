@@ -89,23 +89,31 @@ public class UserPreferences
     {
         lock (_lock)
         {
-            try
-            {
-                var json = new
-                {
-                    lastUsedPickerVoice = LastUsedPickerVoice
-                };
+            SaveCore();
+        }
+    }
 
-                var options = new JsonSerializerOptions { WriteIndented = true };
-                var jsonString = JsonSerializer.Serialize(json, options);
-                File.WriteAllText(_filePath, jsonString);
-
-                _logger?.LogDebug("Saved user preferences to {FilePath}", _filePath);
-            }
-            catch (Exception ex)
+    /// <summary>
+    /// Core save logic without lock. Caller must hold _lock.
+    /// </summary>
+    private void SaveCore()
+    {
+        try
+        {
+            var json = new
             {
-                _logger?.LogError(ex, "Failed to save user preferences to {FilePath}", _filePath);
-            }
+                lastUsedPickerVoice = LastUsedPickerVoice
+            };
+
+            var options = new JsonSerializerOptions { WriteIndented = true };
+            var jsonString = JsonSerializer.Serialize(json, options);
+            File.WriteAllText(_filePath, jsonString);
+
+            _logger?.LogDebug("Saved user preferences to {FilePath}", _filePath);
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogError(ex, "Failed to save user preferences to {FilePath}", _filePath);
         }
     }
 
@@ -119,7 +127,7 @@ public class UserPreferences
         lock (_lock)
         {
             LastUsedPickerVoice = voiceId;
-            Save();
+            SaveCore();
         }
     }
 
