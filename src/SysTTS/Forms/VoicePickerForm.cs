@@ -153,7 +153,10 @@ public partial class VoicePickerForm : Form
     /// </summary>
     private void VoicePickerForm_Deactivate(object? sender, EventArgs e)
     {
-        if (_isReady)
+        // Only dismiss if the form is ready AND no explicit result was already set
+        // (e.g., by SelectCurrentVoice setting DialogResult.OK before Close()).
+        // Without this check, Deactivate fires during Close() and overwrites OK → Cancel.
+        if (_isReady && DialogResult == DialogResult.None)
         {
             DialogResult = DialogResult.Cancel;
             Close();

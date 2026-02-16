@@ -17,7 +17,29 @@ static class Program
     [STAThread]
     static async Task Main(string[] args)
     {
+        // Install WindowsFormsSynchronizationContext on the STA thread before
+        // anything else — .NET 8 doesn't auto-install it until Application.Run,
+        // but we need it earlier for DI registration.
+        Application.EnableVisualStyles();
+        Application.SetCompatibleTextRenderingDefault(false);
+        SynchronizationContext.SetSynchronizationContext(new WindowsFormsSynchronizationContext());
+
         var builder = WebApplication.CreateBuilder(args);
+
+        // Case-insensitive JSON deserialization so API accepts both camelCase and PascalCase
+        builder.Services.ConfigureHttpJsonOptions(options =>
+        {
+            options.SerializerOptions.PropertyNameCaseInsensitive = true;
+        });
+
+        // Ensure appsettings.json is loaded from the application's base directory.
+        // When launched via 'dotnet run --project ...', the content root defaults to
+        // the terminal's working directory, which may not contain appsettings.json.
+        // The CopyToOutputDirectory setting in the .csproj copies it to AppContext.BaseDirectory.
+        builder.Configuration.AddJsonFile(
+            Path.Combine(AppContext.BaseDirectory, "appsettings.json"),
+            optional: false,
+            reloadOnChange: false);
 
         // Bind settings
         builder.Services.Configure<ServiceSettings>(builder.Configuration.GetSection("Service"));
@@ -110,8 +132,6 @@ static class Program
         }
 
         // Run WinForms on main STA thread
-        Application.EnableVisualStyles();
-        Application.SetCompatibleTextRenderingDefault(false);
         Application.Run(new TrayApplicationContext(appCts));
 
         // Stop HotkeyService before shutting down

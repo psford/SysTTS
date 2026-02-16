@@ -8,8 +8,11 @@ namespace SysTTS.Services;
 /// Captures selected text from any application by simulating Ctrl+C.
 /// Preserves the original clipboard contents before and after capture.
 ///
-/// All System.Windows.Forms.Clipboard operations require STA thread.
-/// This implementation marshals clipboard operations to a dedicated STA thread.
+/// All clipboard operations run on a dedicated STA thread (required by WinForms
+/// Clipboard class). After simulating Ctrl+C, the thread pumps Windows messages
+/// via Application.DoEvents() to handle OLE delayed rendering — needed for
+/// Electron apps (VS Code, Slack) and browsers (Firefox, Chrome) which don't
+/// write clipboard data synchronously.
 /// </summary>
 public class ClipboardService : IClipboardService
 {
@@ -24,37 +27,31 @@ public class ClipboardService : IClipboardService
     {
         _logger.LogDebug("CaptureSelectedTextAsync called");
 
-        // Run the capture operation on an STA thread
-        var result = await Task.Run(() =>
+        // Run the capture operation on a dedicated STA thread with message pumping
+        var tcs = new TaskCompletionSource<string?>();
+
+        var staThread = new Thread(() =>
         {
-            var tcs = new TaskCompletionSource<string?>();
-
-            var staThread = new Thread(() =>
+            try
             {
-                try
-                {
-                    var capturedText = CaptureSelectedTextOnSTA();
-                    tcs.SetResult(capturedText);
-                }
-                catch (Exception ex)
-                {
-                    _logger.LogError(ex, "Error capturing selected text on STA thread");
-                    tcs.SetException(ex);
-                }
-            })
+                var capturedText = CaptureSelectedTextOnSTA();
+                tcs.SetResult(capturedText);
+            }
+            catch (Exception ex)
             {
-                Name = "ClipboardCapture-STA",
-                IsBackground = true
-            };
+                _logger.LogError(ex, "Error capturing selected text on STA thread");
+                tcs.SetException(ex);
+            }
+        })
+        {
+            Name = "ClipboardCapture-STA",
+            IsBackground = true
+        };
 
-            staThread.TrySetApartmentState(ApartmentState.STA);
+        staThread.TrySetApartmentState(ApartmentState.STA);
+        staThread.Start();
 
-            staThread.Start();
-            staThread.Join(); // Wait for the STA thread to complete
-            return tcs.Task.GetAwaiter().GetResult();
-        });
-
-        return result;
+        return await tcs.Task;
     }
 
     private string? CaptureSelectedTextOnSTA()
@@ -86,6 +83,7 @@ public class ClipboardService : IClipboardService
             }
 
             // Step 3: Simulate Ctrl+C (Ctrl down, C down, C up, Ctrl up)
+            // SendInput is a global input injection — works from any thread.
             var inputs = new NativeMethods.INPUT[4];
 
             // Ctrl down
@@ -118,9 +116,17 @@ public class ClipboardService : IClipboardService
                 _logger.LogDebug("Sent {Count} input events for Ctrl+C simulation", sent);
             }
 
-            // Step 4: Wait for OS to process clipboard update
-            Thread.Sleep(100);
-            _logger.LogDebug("Waited 100ms for clipboard update");
+            // Step 4: Wait for target app to process Ctrl+C, pumping Windows messages.
+            // Electron apps (VS Code, Slack) and browsers (Firefox) use OLE delayed
+            // rendering — clipboard data isn't available until the reader pumps COM/OLE
+            // messages. Application.DoEvents() processes pending messages on this STA thread.
+            var deadline = DateTime.UtcNow.AddMilliseconds(300);
+            while (DateTime.UtcNow < deadline)
+            {
+                Application.DoEvents();
+                Thread.Sleep(25);
+            }
+            _logger.LogDebug("Waited ~300ms with message pumping for clipboard update");
 
             // Step 5: Read clipboard text
             string? capturedText = null;

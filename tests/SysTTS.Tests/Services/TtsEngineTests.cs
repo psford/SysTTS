@@ -32,6 +32,7 @@ public class TtsEngineTests
             Name: "Test Voice",
             ModelPath: "/path/to/model.onnx",
             ConfigPath: "/path/to/model.onnx.json",
+            TokensPath: "/path/to/model.tokens.txt",
             SampleRate: 22050
         );
 
@@ -87,7 +88,7 @@ public class TtsEngineTests
     {
         // Arrange
         var createCalls = new List<string>();
-        var otherVoice = new VoiceInfo("other-voice", "Other", "/other.onnx", "/other.json", 24000);
+        var otherVoice = new VoiceInfo("other-voice", "Other", "/other.onnx", "/other.json", "/other.tokens.txt", 24000);
 
         _mockVoiceManager
             .Setup(vm => vm.GetVoice("other-voice"))
@@ -131,7 +132,7 @@ public class TtsEngineTests
             (_) => { } // No-op factory
         );
 
-        var otherVoice = new VoiceInfo("other-voice", "Other", "/other.onnx", "/other.json", 24000);
+        var otherVoice = new VoiceInfo("other-voice", "Other", "/other.onnx", "/other.json", "/other.tokens.txt", 24000);
         _mockVoiceManager
             .Setup(vm => vm.GetVoice("other-voice"))
             .Returns(otherVoice);

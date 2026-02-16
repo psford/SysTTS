@@ -27,7 +27,7 @@ Download Piper voice models and espeak-ng phonemization data:
 powershell.exe -File scripts/download-models.ps1
 ```
 
-This downloads the default voice (`en_US-amy-medium`, ~45 MB) and shared espeak-ng data required for phonemization. Models are stored in `voices/` and `espeak-ng-data/` directories (both gitignored).
+This downloads the default voice (`en_US-amy-medium`, ~45 MB) and shared espeak-ng data required for phonemization. Models are stored in `voices/` and `espeak-ng-data/` at the repo root (both gitignored).
 
 ### 3. Configure (Optional)
 

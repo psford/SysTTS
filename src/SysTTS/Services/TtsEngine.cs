@@ -83,7 +83,16 @@ public class TtsEngine : ITtsEngine
 
         // Piper models are VITS models in Sherpa-ONNX
         config.Model.Vits.Model = voice.ModelPath;
-        config.Model.Vits.DataDir = _settings.EspeakDataPath;
+        config.Model.Vits.Tokens = voice.TokensPath;
+
+        // Resolve espeak-ng data directory to an absolute path.
+        // The native sherpa-onnx library may not resolve relative paths from CWD.
+        var espeakDataPath = Path.GetFullPath(_settings.EspeakDataPath);
+        config.Model.Vits.DataDir = espeakDataPath;
+
+        _logger.LogDebug("Creating TTS instance for voice {VoiceId}: Model={Model}, Tokens={Tokens}, DataDir={DataDir}",
+            voice.Id, voice.ModelPath, voice.TokensPath, espeakDataPath);
+
         config.Model.NumThreads = 2;
         config.Model.Provider = "cpu";
 

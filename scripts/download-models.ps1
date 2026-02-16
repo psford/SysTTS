@@ -9,6 +9,9 @@ param(
 $ErrorActionPreference = "Stop"
 
 # Define paths
+# Voice models and espeak-ng-data install to the repo root because
+# dotnet run --project src/SysTTS/SysTTS.csproj sets the working
+# directory to where the command is invoked (the repo root).
 $VoicesDir = Join-Path $ProjectRoot "voices"
 $EspeakDataDir = Join-Path $ProjectRoot "espeak-ng-data"
 $TempDir = Join-Path $ProjectRoot "temp"
@@ -78,6 +81,25 @@ try {
     }
 } catch {
     Write-Error "Failed to download or extract espeak-ng-data`nError: $_"
+}
+
+# Ensure ONNX model has required metadata for sherpa-onnx.
+# Piper models from HuggingFace lack sample_rate metadata which causes native crashes.
+Write-Host "Ensuring ONNX model metadata..." -ForegroundColor Cyan
+$MetadataScript = Join-Path $PSScriptRoot "ensure_model_metadata.py"
+
+if ((Test-Path $ModelPath) -and (Test-Path $ConfigPath) -and (Test-Path $MetadataScript)) {
+    try {
+        $result = python $MetadataScript $ModelPath $ConfigPath 2>&1
+        Write-Host "  $result" -ForegroundColor Green
+    } catch {
+        Write-Host "  [WARN] Failed to ensure model metadata: $_" -ForegroundColor Yellow
+        Write-Host "  Install 'onnx' package: pip install onnx" -ForegroundColor Yellow
+    }
+} else {
+    if (-not (Test-Path $MetadataScript)) {
+        Write-Host "  [WARN] ensure_model_metadata.py not found at $MetadataScript" -ForegroundColor Yellow
+    }
 }
 
 # Cleanup temp directory
