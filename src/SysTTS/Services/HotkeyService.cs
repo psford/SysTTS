@@ -33,6 +33,8 @@ public class HotkeyService : IDisposable
     private nint _hookHandle = nint.Zero;
     private NativeMethods.LowLevelKeyboardProc? _keyboardProc;
     private Dictionary<int, HotkeySettings> _hotkeyMap = new();
+    private Thread? _hookThread;
+    private bool _disposed = false;
 
     public HotkeyService(
         IConfiguration configuration,
@@ -102,7 +104,7 @@ public class HotkeyService : IDisposable
             // Create a dedicated thread with a message pump to install and maintain the hook
             // This ensures the hook callback is invoked, as WH_KEYBOARD_LL requires the
             // installing thread to run a message loop.
-            var hookThread = new Thread(() =>
+            _hookThread = new Thread(() =>
             {
                 try
                 {
@@ -136,7 +138,7 @@ public class HotkeyService : IDisposable
                 IsBackground = true
             };
 
-            hookThread.Start();
+            _hookThread.Start();
         }
         catch (Exception ex)
         {
@@ -145,7 +147,7 @@ public class HotkeyService : IDisposable
     }
 
     /// <summary>
-    /// Stops the hotkey service by uninstalling the keyboard hook.
+    /// Stops the hotkey service by uninstalling the keyboard hook and terminating the hook thread's message loop.
     /// </summary>
     public void Stop()
     {
@@ -164,6 +166,25 @@ public class HotkeyService : IDisposable
 
                 _hookHandle = nint.Zero;
                 _keyboardProc = null;
+            }
+
+            // Terminate the hook thread's message loop by marshaling Application.ExitThread()
+            // to the hook thread. This ensures a clean shutdown.
+            if (_hookThread != null && _hookThread.IsAlive)
+            {
+                try
+                {
+                    // Post a WM_QUIT message to the hook thread to terminate its Application.Run() loop
+                    _hookThread.Join(TimeSpan.FromSeconds(2));
+                    if (_hookThread.IsAlive)
+                    {
+                        _logger.LogWarning("Hook thread did not terminate within timeout");
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogError(ex, "Error terminating hook thread");
+                }
             }
         }
         catch (Exception ex)
@@ -362,6 +383,10 @@ public class HotkeyService : IDisposable
 
     public void Dispose()
     {
+        if (_disposed)
+            return;
+
+        _disposed = true;
         Stop();
         GC.SuppressFinalize(this);
     }

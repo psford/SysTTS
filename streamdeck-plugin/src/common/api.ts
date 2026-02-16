@@ -70,6 +70,9 @@ export async function stopSpeaking(): Promise<void> {
   try {
     const response = await fetch(`${BASE_URL}/api/stop`, {
       method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
       body: JSON.stringify({}),
     });
 

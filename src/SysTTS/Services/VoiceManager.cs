@@ -235,6 +235,7 @@ public class VoiceManager : IVoiceManager
     public void Dispose()
     {
         if (_disposed) return;
+        _disposed = true;
 
         // Disable the watcher before disposing to prevent race conditions
         if (_watcher != null)
@@ -245,7 +246,6 @@ public class VoiceManager : IVoiceManager
 
         _catalogLock?.Dispose();
         _rescanCts?.Dispose();
-        _disposed = true;
     }
 
     private void ThrowIfDisposed()

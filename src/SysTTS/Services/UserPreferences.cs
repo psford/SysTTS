@@ -11,7 +11,7 @@ public class UserPreferences
 {
     private readonly string _filePath;
     private readonly object _lock = new();
-    private ILogger<UserPreferences>? _logger;
+    private readonly ILogger<UserPreferences>? _logger;
 
     /// <summary>
     /// Last-used voice ID in picker mode. Null if not yet set.
@@ -23,19 +23,19 @@ public class UserPreferences
     /// <summary>
     /// Creates a new UserPreferences instance with the default file path.
     /// </summary>
-    public UserPreferences()
+    public UserPreferences() : this(Path.Combine(AppContext.BaseDirectory, "user-preferences.json"))
     {
-        _filePath = Path.Combine(AppContext.BaseDirectory, "user-preferences.json");
-        Load();
     }
 
     /// <summary>
     /// Creates a new UserPreferences instance with a custom file path (for testing).
     /// </summary>
     /// <param name="filePath">Path to the preferences JSON file</param>
-    public UserPreferences(string filePath)
+    /// <param name="logger">Optional logger for dependency injection</param>
+    public UserPreferences(string filePath, ILogger<UserPreferences>? logger = null)
     {
         _filePath = filePath;
+        _logger = logger;
         Load();
     }
 
@@ -131,11 +131,4 @@ public class UserPreferences
         }
     }
 
-    /// <summary>
-    /// Internal method to set logger (for dependency injection scenarios).
-    /// </summary>
-    internal void SetLogger(ILogger<UserPreferences> logger)
-    {
-        _logger = logger;
-    }
 }

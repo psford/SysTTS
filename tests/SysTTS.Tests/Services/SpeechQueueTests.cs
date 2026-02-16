@@ -95,10 +95,10 @@ public class SpeechQueueTests : IDisposable
         _queue.Enqueue(lowPriorityRequest);
 
         // Wait for playback to start
-        await playStarted.Task.ConfigureAwait(false);
+        await playStarted.Task;
 
         // Give a moment for processing loop to start playback
-        await Task.Delay(100).ConfigureAwait(false);
+        await Task.Delay(100);
 
         // Enqueue high priority request
         _queue.Enqueue(highPriorityRequest);
@@ -138,7 +138,7 @@ public class SpeechQueueTests : IDisposable
                     processedRequestIds.Add(voiceArg);
                 }
                 // Block indefinitely until unblocked
-                await processingBlocked.Task.ConfigureAwait(false);
+                await processingBlocked.Task;
             });
 
         var request1 = new SpeechRequest("1", "Text 1", "voice-1", 1, "test");
@@ -149,7 +149,7 @@ public class SpeechQueueTests : IDisposable
 
         // Act
         _queue.Enqueue(request1); // Queue: [1]
-        await Task.Delay(50).ConfigureAwait(false);
+        await Task.Delay(50);
 
         _queue.Enqueue(request2); // Queue: [1, 2] (request1 is being processed)
         _queue.Enqueue(request3); // Queue: [1, 2, 3]
@@ -190,7 +190,7 @@ public class SpeechQueueTests : IDisposable
         _queue.Enqueue(request2);
 
         // Wait for queue to process
-        await Task.Delay(200).ConfigureAwait(false);
+        await Task.Delay(200);
 
         // Assert - Verify that priority 1 request (with voice-1) is synthesized FIRST
         // by checking the voice IDs passed to Synthesize in order
@@ -240,13 +240,13 @@ public class SpeechQueueTests : IDisposable
 
         // Wait for first to start playing
         var waitTask = Task.WhenAny(playStarted.Task, Task.Delay(1000));
-        await waitTask.ConfigureAwait(false);
+        await waitTask;
 
         // Act
-        await _queue.StopAndClear().ConfigureAwait(false);
+        await _queue.StopAndClear();
 
         // Wait a bit for cancellation to propagate
-        await Task.Delay(100).ConfigureAwait(false);
+        await Task.Delay(100);
 
         // Assert
         _queue.QueueDepth.Should().Be(0);
@@ -292,7 +292,7 @@ public class SpeechQueueTests : IDisposable
         // Slow processing
         _mockAudioPlayer.Setup(a => a.PlayAsync(It.IsAny<float[]>(), It.IsAny<int>(), It.IsAny<CancellationToken>()))
             .Returns(async (float[] samples, int rate, CancellationToken ct) =>
-                await Task.Delay(1000, ct).ConfigureAwait(false));
+                await Task.Delay(1000, ct));
 
         var request1 = new SpeechRequest("1", "Text 1", "voice", 1, "test");
         var request2 = new SpeechRequest("2", "Text 2", "voice", 2, "test");

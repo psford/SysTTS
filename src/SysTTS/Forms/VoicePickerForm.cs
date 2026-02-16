@@ -51,8 +51,7 @@ public partial class VoicePickerForm : Form
         // Populate ListBox with voice names, storing voice ID as tag
         foreach (var voice in voices)
         {
-            var index = _voiceListBox.Items.Add(voice.Name);
-            _voiceListBox.Items[index] = new VoiceListItem(voice.Id, voice.Name);
+            var index = _voiceListBox.Items.Add(new VoiceListItem(voice.Id, voice.Name));
 
             // Pre-select the last-used voice if it matches
             if (voice.Id == lastUsedVoiceId)

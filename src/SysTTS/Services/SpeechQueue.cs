@@ -221,6 +221,12 @@ public class SpeechQueue : ISpeechQueue, IDisposable
     {
         // PriorityQueue doesn't support removing arbitrary items,
         // so we need to rebuild it without the lowest priority oldest item.
+        //
+        // Complexity: O(n log n) due to dequeuing all items (O(n log n)) and re-enqueueing
+        // the remaining items (O(n log n)). This is acceptable because:
+        // - Eviction only occurs when queue reaches MaxQueueDepth (typically small, e.g., 5-10 items)
+        // - Eviction happens infrequently (only on high concurrent request load)
+        // - The alternative (tracking item insertion order externally) would add complexity elsewhere
 
         // Find the lowest priority (highest number)
         var items = new List<(SpeechRequest request, int priority)>();

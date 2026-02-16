@@ -69,7 +69,7 @@ public class UserPreferencesTests : IDisposable
     }
 
     [Fact]
-    public void Save_IsThreadSafe_WhenCalledConcurrently()
+    public async Task Save_IsThreadSafe_WhenCalledConcurrently()
     {
         // Arrange
         var prefs = new UserPreferences(_preferencesFilePath);
@@ -85,7 +85,7 @@ public class UserPreferencesTests : IDisposable
             }));
         }
 
-        Task.WaitAll(tasks.ToArray());
+        await Task.WhenAll(tasks);
 
         // Assert
         // File should exist and be valid JSON

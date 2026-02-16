@@ -97,7 +97,7 @@ SysTTS is a system-level text-to-speech service composed of layered components: 
 │  └──────────────────────────────────────────────────────────────────────┘   │
 │  ┌──────────────────────────────────────────────────────────────────────┐   │
 │  │ ClipboardService (Clipboard Access)                                  │   │
-│  │ - Ctrl+C simulation via SendKeys                                     │   │
+│  │ - Ctrl+C simulation via SendInput                                    │   │
 │  │ - Clipboard save/restore                                             │   │
 │  │ - STA thread marshaling for clipboard operations                     │   │
 │  └──────────────────────────────────────────────────────────────────────┘   │
@@ -412,14 +412,14 @@ public class HotkeySettings
 **Key Responsibilities:**
 - `CaptureSelectedTextAsync()`:
   - Save current clipboard content
-  - Simulate Ctrl+C via `SendKeys.SendWait()` to copy selected text
+  - Simulate Ctrl+C via `SendInput` to copy selected text
   - Read clipboard
   - Restore original clipboard content
   - Return text (or empty string if clipboard is empty)
 - Marshaling: runs on main STA thread for clipboard access (WinForms requirement)
 
 **Dependencies:**
-- `System.Windows.Forms.SendKeys` for Ctrl+C simulation
+- Win32 `SendInput` API for Ctrl+C simulation
 - WinForms clipboard access
 
 ---

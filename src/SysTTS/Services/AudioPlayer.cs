@@ -3,11 +3,12 @@ using Microsoft.Extensions.Logging;
 
 namespace SysTTS.Services;
 
-public class AudioPlayer : IAudioPlayer
+public class AudioPlayer : IAudioPlayer, IDisposable
 {
     private readonly ILogger<AudioPlayer> _logger;
     private CancellationTokenSource? _currentPlaybackCts;
     private readonly object _playbackLock = new();
+    private bool _disposed = false;
 
     public AudioPlayer(ILogger<AudioPlayer> logger)
     {
@@ -149,5 +150,21 @@ public class AudioPlayer : IAudioPlayer
                 }
             }
         }
+    }
+
+    public void Dispose()
+    {
+        if (_disposed)
+            return;
+
+        _disposed = true;
+
+        lock (_playbackLock)
+        {
+            _currentPlaybackCts?.Dispose();
+            _currentPlaybackCts = null;
+        }
+
+        GC.SuppressFinalize(this);
     }
 }
