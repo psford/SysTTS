@@ -271,11 +271,14 @@ public class HotkeyService : IDisposable
             return;
         }
 
-        // Send text to SpeechService with hotkey-configured voice (AC3.1)
+        // Use last-picked voice from preferences if available, otherwise fall back to hotkey config
+        var voice = _userPreferences.LastUsedPickerVoice ?? hotkey.Voice;
+
+        // Send text to SpeechService (AC3.1)
         var (queued, requestId) = _speechService.ProcessSpeakRequest(
             selectedText,
             "hotkey",
-            hotkey.Voice);
+            voice);
 
         if (queued)
         {
