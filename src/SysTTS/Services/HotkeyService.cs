@@ -168,13 +168,13 @@ public class HotkeyService : IDisposable
                 _keyboardProc = null;
             }
 
-            // Terminate the hook thread's message loop by marshaling Application.ExitThread()
-            // to the hook thread. This ensures a clean shutdown.
+            // Wait briefly for the hook thread to exit. Since the thread is marked
+            // IsBackground = true, it will be terminated when the process exits
+            // even if Join times out.
             if (_hookThread != null && _hookThread.IsAlive)
             {
                 try
                 {
-                    // Post a WM_QUIT message to the hook thread to terminate its Application.Run() loop
                     _hookThread.Join(TimeSpan.FromSeconds(2));
                     if (_hookThread.IsAlive)
                     {

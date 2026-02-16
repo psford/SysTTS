@@ -104,7 +104,7 @@ public class SpeechQueueTests : IDisposable
         _queue.Enqueue(highPriorityRequest);
 
         // Wait a bit for interrupt to occur
-        await Task.Delay(200).ConfigureAwait(false);
+        await Task.Delay(200);
 
         // Assert - PlayAsync should have been called at least twice
         // Once for low-priority (which is interrupted and cancelled)
