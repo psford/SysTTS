@@ -3,6 +3,9 @@ voices/
 espeak-ng-data/
 temp/
 
+# User preferences (runtime changes)
+user-preferences.json
+
 # Build results
 bin/
 obj/
