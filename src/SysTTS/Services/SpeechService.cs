@@ -127,6 +127,10 @@ public class SpeechService : ISpeechService
             {
                 _logger.LogWarning(ex, "Invalid regex filter pattern: {Pattern}", pattern);
             }
+            catch (RegexMatchTimeoutException ex)
+            {
+                _logger.LogWarning(ex, "Regex filter pattern timed out: {Pattern}", pattern);
+            }
         }
 
         return false;
