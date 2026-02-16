@@ -1,3 +1,7 @@
+# Voice models (large binary files)
+voices/
+espeak-ng-data/
+
 # Build results
 bin/
 obj/
