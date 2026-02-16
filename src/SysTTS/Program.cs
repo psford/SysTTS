@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
 using SysTTS;
 using SysTTS.Models;
 using SysTTS.Services;
@@ -27,6 +28,10 @@ static class Program
         builder.Services.AddSingleton<IAudioPlayer, AudioPlayer>();
         builder.Services.AddSingleton<ISpeechQueue, SpeechQueue>();
         builder.Services.AddSingleton<ISpeechService, SpeechService>();
+
+        // Register Clipboard and Hotkey services
+        builder.Services.AddSingleton<IClipboardService, ClipboardService>();
+        builder.Services.AddSingleton<HotkeyService>();
 
         // Read port from config and bind Kestrel to localhost only
         var serviceSettings = builder.Configuration.GetSection("Service").Get<ServiceSettings>()
@@ -71,7 +76,13 @@ static class Program
         // Wait for Kestrel to start or fail (port-in-use detection)
         var started = new TaskCompletionSource();
         var lifetime = app.Services.GetRequiredService<IHostApplicationLifetime>();
-        lifetime.ApplicationStarted.Register(() => started.SetResult());
+        lifetime.ApplicationStarted.Register(() =>
+        {
+            // Start HotkeyService after Kestrel confirms running
+            var hotkeyService = app.Services.GetRequiredService<HotkeyService>();
+            hotkeyService.Start();
+            started.SetResult();
+        });
 
         var completedTask = await Task.WhenAny(started.Task, webTask);
         if (completedTask == webTask)
@@ -92,6 +103,17 @@ static class Program
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
         Application.Run(new TrayApplicationContext(appCts));
+
+        // Stop HotkeyService before shutting down
+        try
+        {
+            var hotkeyService = app.Services.GetRequiredService<HotkeyService>();
+            hotkeyService.Stop();
+        }
+        catch (Exception)
+        {
+            // Log but don't fail shutdown (error will be logged by HotkeyService.Stop())
+        }
 
         // Wait for Kestrel to stop after WinForms exits
         try
