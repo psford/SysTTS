@@ -27,4 +27,16 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
+  <!-- Create directory junctions so the output dir points to source data directories
+       without copying hundreds of MB on every build. -->
+  <Target Name="LinkDataDirectories" AfterTargets="Build">
+    <PropertyGroup>
+      <RepoRoot>$([System.IO.Path]::GetFullPath('$(MSBuildProjectDirectory)\..\..'))
+      </RepoRoot>
+    </PropertyGroup>
+    <Exec Command="if not exist &quot;$(OutputPath)voices&quot; mklink /J &quot;$(OutputPath)voices&quot; &quot;$(RepoRoot)\voices&quot;"
+          Condition="Exists('$(RepoRoot)\voices') And !Exists('$(OutputPath)voices')" />
+    <Exec Command="if not exist &quot;$(OutputPath)espeak-ng-data&quot; mklink /J &quot;$(OutputPath)espeak-ng-data&quot; &quot;$(RepoRoot)\espeak-ng-data&quot;"
+          Condition="Exists('$(RepoRoot)\espeak-ng-data') And !Exists('$(OutputPath)espeak-ng-data')" />
+  </Target>
 </Project>

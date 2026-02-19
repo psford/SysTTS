@@ -85,9 +85,11 @@ public class TtsEngine : ITtsEngine
         config.Model.Vits.Model = voice.ModelPath;
         config.Model.Vits.Tokens = voice.TokensPath;
 
-        // Resolve espeak-ng data directory to an absolute path.
-        // The native sherpa-onnx library may not resolve relative paths from CWD.
-        var espeakDataPath = Path.GetFullPath(_settings.EspeakDataPath);
+        // Resolve espeak-ng data directory against the application's base directory,
+        // not the current working directory.
+        var espeakDataPath = Path.IsPathRooted(_settings.EspeakDataPath)
+            ? _settings.EspeakDataPath
+            : Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, _settings.EspeakDataPath));
         config.Model.Vits.DataDir = espeakDataPath;
 
         _logger.LogDebug("Creating TTS instance for voice {VoiceId}: Model={Model}, Tokens={Tokens}, DataDir={DataDir}",

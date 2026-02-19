@@ -19,7 +19,13 @@ public class VoiceManager : IVoiceManager
 
     public VoiceManager(IOptions<ServiceSettings> options, ILogger<VoiceManager> logger)
     {
-        _voicesPath = options.Value.VoicesPath;
+        // Resolve relative VoicesPath against the application's base directory,
+        // not the current working directory. This ensures voices are found
+        // regardless of where the exe is launched from.
+        var configuredPath = options.Value.VoicesPath;
+        _voicesPath = Path.IsPathRooted(configuredPath)
+            ? configuredPath
+            : Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, configuredPath));
         _defaultVoice = options.Value.DefaultVoice;
         _logger = logger;
 
