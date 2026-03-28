@@ -16,9 +16,9 @@ jobs:
   vulnerability-scan:
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@de0fac2dfffc5ffc2c1a8cead8e7b8d24cf50dcf
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
-      - uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
@@ -38,9 +38,9 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@de0fac2dfffc5ffc2c1a8cead8e7b8d24cf50dcf
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
 
-      - uses: actions/setup-dotnet@c2fa09f4bde5ebb9d1777cf28262a3eb3db3ced7
+      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9
         with:
           dotnet-version: ${{ env.DOTNET_VERSION }}
 
