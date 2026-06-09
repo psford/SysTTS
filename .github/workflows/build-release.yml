@@ -1,86 +1,26 @@
 name: Build and Release
 
+# Thin wrapper around the canonical reusable workflow in claude-env. The actual
+# pipeline (NuGet vulnerability scan → publish self-contained → zip + checksum
+# → GitHub Release) lives at:
+#   psford/claude-env/.github/workflows/windows-service-build-release.yml
+#
+# Only the three project-specific values (app name, project path, default
+# appsettings path) live here. To change the pipeline itself, edit the
+# reusable workflow in claude-env so the change applies to SysTTS AND
+# whisper-service at once.
+
 on:
   push:
     branches: [main]
   workflow_dispatch:
 
-env:
-  APP_NAME: SysTTS
-  PROJECT_PATH: src/SysTTS/SysTTS.csproj
-  APPSETTINGS_SOURCE: src/SysTTS/appsettings.json
-  PUBLISH_DIR: publish
-  DOTNET_VERSION: '8.0'
-
 jobs:
-  vulnerability-scan:
-    runs-on: windows-latest
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-
-      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9
-        with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
-
-      - name: Check for vulnerable packages
-        shell: pwsh
-        run: |
-          $output = dotnet list ${{ env.PROJECT_PATH }} package --vulnerable --include-transitive 2>&1
-          Write-Output $output
-          if ($output -match "has the following vulnerable packages") {
-            Write-Error "Vulnerable NuGet packages detected. Fix before releasing."
-            exit 1
-          }
-
-  build-and-release:
-    needs: vulnerability-scan
-    runs-on: windows-latest
+  build:
+    uses: psford/claude-env/.github/workflows/windows-service-build-release.yml@main
+    with:
+      app_name: SysTTS
+      project_path: src/SysTTS/SysTTS.csproj
+      appsettings_source: src/SysTTS/appsettings.json
     permissions:
       contents: write
-    steps:
-      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5
-
-      - uses: actions/setup-dotnet@67a3573c9a986a3f9c594539f4ab511d57bb3ce9
-        with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
-
-      - name: Publish self-contained
-        run: >
-          dotnet publish ${{ env.PROJECT_PATH }}
-          -c Release
-          -r win-x64
-          --self-contained true
-          -p:PublishReadyToRun=true
-          -o ${{ env.PUBLISH_DIR }}
-
-      - name: Remove user-configurable files from publish
-        shell: pwsh
-        run: |
-          $publishDir = "${{ env.PUBLISH_DIR }}"
-          Remove-Item -Path "$publishDir/appsettings.json" -ErrorAction SilentlyContinue
-          Remove-Item -Path "$publishDir/appsettings.Development.json" -ErrorAction SilentlyContinue
-          Remove-Item -Path "$publishDir/models" -Recurse -ErrorAction SilentlyContinue
-
-      - name: Save default appsettings as separate asset
-        shell: pwsh
-        run: |
-          Copy-Item "${{ env.APPSETTINGS_SOURCE }}" "appsettings.default.json"
-
-      - name: Create zip and checksum
-        shell: pwsh
-        run: |
-          $zipName = "${{ env.APP_NAME }}-win-x64.zip"
-          Compress-Archive -Path "${{ env.PUBLISH_DIR }}/*" -DestinationPath $zipName
-          $hash = Get-FileHash -Path $zipName -Algorithm SHA256
-          "$($hash.Hash.ToLower())  $zipName" | Out-File -FilePath "$zipName.sha256" -Encoding ASCII
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@153bb8e04406b158c6c84fc1615b65b24149a1fe
-        with:
-          tag_name: v1.0.${{ github.run_number }}
-          name: ${{ env.APP_NAME }} v1.0.${{ github.run_number }}
-          generate_release_notes: true
-          files: |
-            ${{ env.APP_NAME }}-win-x64.zip
-            ${{ env.APP_NAME }}-win-x64.zip.sha256
-            appsettings.default.json
