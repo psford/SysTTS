@@ -1,394 +1,300 @@
-# CLAUDE.md — SysTTS Project Conventions
-
-> Last verified: 2026-02-16
-
-Claude Code development guidelines for the SysTTS project.
-
----
-
-## Project Overview
-
-**SysTTS** — A system-level Text-to-Speech service for Windows with:
-- **System tray icon** for lifecycle control and quick access
-- **HTTP API** (localhost:5100) for programmatic TTS via any application
-- **Global hotkeys** (F22, F23) for quick-speak with voice selection
-- **Stream Deck plugin** for button-based voice control and custom actions
-- **Neural voices** powered by Piper ONNX models via Sherpa-ONNX
-- **Audio playback** via NAudio with volume control and device selection
-- **Priority-based speech queue** with interrupt behavior
-
----
-
-## Project Structure
-
-```
-SysTTS/
-├── CLAUDE.md                      # Project conventions and guidelines
-├── README.md                      # Quick start and feature overview
-├── SysTTS.sln                     # Solution file (src/ and tests/ folders)
-│
-├── src/SysTTS/                    # Main WinForms + ASP.NET Core application
-│   ├── Program.cs                 # Entry point: host builder, endpoints
-│   ├── appsettings.json           # Configuration (port, voices, hotkeys, etc.)
-│   ├── TrayApplicationContext.cs  # System tray icon and lifecycle
-│   ├── Services/                  # Core service implementations
-│   │   ├── VoiceManager.cs        # Voice scanning, FileSystemWatcher, metadata
-│   │   ├── TtsEngine.cs           # Sherpa-ONNX wrapper (thread-unsafe per instance)
-│   │   ├── AudioPlayer.cs         # NAudio WaveOutEvent wrapper
-│   │   ├── SpeechQueue.cs         # Priority queue with serial processing
-│   │   ├── SpeechService.cs       # Source filtering, voice resolution
-│   │   ├── HotkeyService.cs       # Win32 keyboard hooks (dedicated thread)
-│   │   ├── ClipboardService.cs    # Clipboard save/restore, Ctrl+C simulation, OLE message pumping
-│   │   └── UserPreferences.cs     # Persists picker voice to user-preferences.json
-│   ├── Handlers/                  # HTTP request handlers
-│   │   └── SpeakSelectionHandler.cs # Clipboard integration for hotkeys
-│   ├── Interop/                   # Win32 P/Invoke declarations
-│   │   ├── NativeMethods.cs       # Win32 API declarations
-│   │   └── VirtualKeyParser.cs    # Virtual key code parsing
-│   ├── Models/                    # DTOs and data models
-│   ├── Settings/                  # Settings POCOs (Service, Audio, Hotkey, Source)
-│   ├── Forms/                     # WinForms UI
-│   │   └── VoicePickerForm.cs     # Voice selection dialog
-│   └── SysTTS.csproj              # Project configuration
-│
-├── tests/SysTTS.Tests/            # xUnit test project
-│   ├── SysTTS.Tests.csproj
-│   └── *.cs                       # Test files
-│
-├── streamdeck-plugin/             # Stream Deck plugin (TypeScript/Node.js)
-│   ├── .sdignore                  # Files to exclude from plugin package
-│   ├── package.json               # npm scripts
-│   ├── tsconfig.json
-│   ├── rollup.config.mjs          # Build configuration
-│   ├── com.systts.sdPlugin/       # Plugin output directory
-│   └── src/                       # TypeScript source
-│       ├── index.ts               # Plugin entry point
-│       ├── actions/               # Stream Deck actions (Speak, Stop, etc.)
-│       └── common/                # API client, configuration helpers
-│
-├── voices/                        # Piper ONNX voice models (gitignored)
-│   ├── en_US-amy-medium.onnx
-│   ├── en_US-amy-medium.onnx.json
-│   └── ...
-│
-├── espeak-ng-data/                # Shared phonemization data (gitignored)
-│   └── ...
-│
-├── user-preferences.json          # Runtime: persisted picker voice (gitignored)
-│
-├── scripts/                       # Utility scripts
-│   ├── download-models.ps1        # Download voice models from HuggingFace
-│   └── ...
-│
-└── docs/                          # Documentation
-    ├── CUSTOM_VOICES.md           # Voice training and import guide
-    ├── INTEGRATION.md             # API reference and integration examples
-    ├── TECHNICAL_SPEC.md          # Architecture and implementation reference
-    └── ...
-```
-
----
-
-## Build & Run
-
-### Prerequisites
-- **.NET 8 SDK** (includes ASP.NET Core / Kestrel)
-- **Windows 10 or 11** (WinForms + Win32 keyboard hooks)
-- **Voice models** (download via `download-models.ps1`)
-- *(Optional)* **Stream Deck + Elgato software** for plugin development
-
-### Build
-
-```bash
-# Build main application
-dotnet build src/SysTTS/SysTTS.csproj
-
-# Build tests
-dotnet build tests/SysTTS.Tests/SysTTS.Tests.csproj
-
-# Build Stream Deck plugin
-cd streamdeck-plugin
-npm install
-npm run build
-```
-
-### Run
-
-```bash
-# Download voice models (one-time)
-powershell.exe -File scripts/download-models.ps1
-
-# Run main application (starts tray icon + HTTP API)
-dotnet run --project src/SysTTS/SysTTS.csproj
-
-# Verify HTTP API is running
-curl http://127.0.0.1:5100/api/status
-
-# Run tests
-dotnet test tests/SysTTS.Tests/
-
-# Watch Stream Deck plugin source for changes
-cd streamdeck-plugin
-npm run watch
-```
-
-### Configuration
-
-Edit `src/SysTTS/appsettings.json` to configure:
-- **Port** (default: 5100, localhost only)
-- **Default voice** (must match a voice in `voices/`)
-- **Voice paths** for models and espeak data
-- **Hotkey mappings** (F22/F23 modes)
-- **Speech sources** (T-Tracker, custom apps) with filtering and priority
-- **Audio output device** and volume
-
-Configuration changes require application restart.
-
----
-
-## Testing
-
-### Framework & Tools
-- **Test Framework:** xUnit
-- **Mocking:** Moq
-- **Assertions:** FluentAssertions
-- **Naming Convention:** `MethodName_Condition_Expected`
-- **Pattern:** AAA (Arrange, Act, Assert)
-
-### Example Test Structure
-
-```csharp
-[Fact]
-public void ProcessSpeakRequest_WithValidText_ReturnsQueuedTrue()
-{
-    // Arrange
-    var mockVoiceManager = new Mock<IVoiceManager>();
-    var service = new SpeechService(mockVoiceManager.Object);
-
-    // Act
-    var (queued, id) = service.ProcessSpeakRequest("Hello", null, null);
-
-    // Assert
-    queued.Should().BeTrue();
-    id.Should().NotBeEmpty();
-}
-```
-
-### Running Tests
-
-```bash
-# Run all tests
-dotnet test tests/SysTTS.Tests/
-
-# Run single test class
-dotnet test tests/SysTTS.Tests/ --filter "ClassName"
-
-# Run with verbosity
-dotnet test tests/SysTTS.Tests/ -v detailed
-
-# Run with code coverage
-dotnet test tests/SysTTS.Tests/ /p:CollectCoverageData=true
-```
-
----
-
-## Architecture Notes
-
-### Threading Model
-
-- **Main STA Thread:** WinForms application context, message pump
-  - Required for clipboard operations (safe access)
-  - Required for UI dialogs (VoicePickerForm)
-  - SynchronizationContext captured at startup and injected via DI
-
-- **HotkeyService-Hook Thread:** Dedicated background thread with its own message pump
-  - Installs WH_KEYBOARD_LL hook (requires a message loop on the installing thread)
-  - Runs `Application.Run()` to pump messages for the hook callback
-  - Offloads hotkey processing to `Task.Run()` to stay within 1000ms callback timeout
-  - Marshals UI operations (VoicePickerForm) to STA thread via SynchronizationContext
-
-- **Kestrel Thread Pool:** ASP.NET Core HTTP API
-  - Runs on background threads (controlled by Kestrel)
-  - Handles API requests independently from UI thread
-  - Marshals clipboard operations to STA thread via SynchronizationContext
-
-- **Synthesis Background Tasks:**
-  - TtsEngine synthesis runs off-thread (Sherpa-ONNX)
-  - AudioPlayer playback managed by NAudio (off-thread)
-  - No blocking operations on main thread
-
-**Key Rule:** SpeechService, TtsEngine, AudioPlayer, and SpeechQueue are **singletons** registered in DI. Parallel requests serialize through the queue; synthesis is thread-pooled.
-
-### Speech Queue Behavior
-
-- **Priority queue:** Lower priority number = higher precedence
-- **Serial playback:** Synthesis and audio output serialized (no audio collision)
-- **Max depth:** Configurable (default: 10) — oldest low-priority items evicted when full
-- **Interrupt:** If `InterruptOnHigherPriority` is true, a high-priority request stops current speech
-- **Sources:** Each source (t-tracker, default) has priority and optional regex filters
-
-### Voice Manager Lifecycle
-
-- **Startup:** Scans `voices/` directory for `.onnx` + `.onnx.json` pairs
-- **Lazy Loading:** TtsEngine instances created on-demand per voice
-- **Caching:** Loaded engines cached in memory (not unloaded until shutdown)
-- **FileSystemWatcher:** Monitors `voices/` for new/deleted models at runtime
-  - New models detected immediately and available to API
-  - Config changes require application restart for source mappings
-
-### Win32 Keyboard Hooks
-
-- Uses `WH_KEYBOARD_LL` low-level hook via P/Invoke (not `RegisterHotKey`)
-- Hook installed on dedicated `HotkeyService-Hook` background thread with its own message pump
-- Callback filters for registered virtual key codes from config (e.g., F22, F23)
-- Processing offloaded to `Task.Run()` to avoid blocking the 1000ms hook callback timeout
-- Delegate reference stored in field to prevent GC collection
-- Supports two modes:
-  - **Direct:** Immediately capture selected text via ClipboardService and speak with last-picked voice (falls back to configured voice if no picker selection has been made)
-  - **Picker:** Capture text, show VoicePickerForm on STA thread (via SynchronizationContext), speak with selected voice; saves selection to UserPreferences for both picker and direct mode
-
-### Sherpa-ONNX & NAudio
-
-- **Sherpa-ONNX:** ONNX Runtime wrapper for TTS synthesis
-  - NOT thread-safe per instance (TtsEngine serializes calls)
-  - Processes text → phonemes → audio (float32)
-  - Runtime package: `org.k2fsa.sherpa.onnx.runtime.win-x64`
-  - Requires `espeak-ng-data/` directory for phonemization
-
-- **NAudio:** Audio playback
-  - Wraps WaveOutEvent (system audio device)
-  - Converts float32 → int16 PCM
-  - Volume control via WaveOutEvent.Volume property
-
----
-
-## Dependencies
-
-| Package | Version | Purpose |
-|---------|---------|---------|
-| `org.k2fsa.sherpa.onnx` | 1.12.23 | TTS synthesis wrapper |
-| `org.k2fsa.sherpa.onnx.runtime.win-x64` | 1.12.23 | ONNX Runtime for Windows x64 |
-| `NAudio` | 2.2.1 | Audio playback (WaveOutEvent) |
-| `Microsoft.AspNetCore.App` (framework ref) | — | Kestrel HTTP server, DI |
-| `xunit` | 2.5.3 | Test framework |
-| `Moq` | 4.20.72 | Mocking library |
-| `FluentAssertions` | 6.12.2 | Assertion library |
-
----
-
-## Configuration Schema
-
-**`appsettings.json`** structure:
-
-```json
-{
-  "Service": {
-    "Port": 5100,
-    "VoicesPath": "voices",
-    "DefaultVoice": "en_US-amy-medium",
-    "EspeakDataPath": "espeak-ng-data",
-    "MaxQueueDepth": 10,
-    "InterruptOnHigherPriority": true
-  },
-  "Sources": {
-    "source-name": {
-      "voice": "voice-id",
-      "filters": ["pattern1", "pattern2"] | null,
-      "priority": 1
-    }
-  },
-  "Hotkeys": [
-    { "Key": "F23", "Mode": "direct", "Voice": "voice-id" },
-    { "Key": "F22", "Mode": "picker" }
-  ],
-  "Audio": {
-    "OutputDevice": null,
-    "Volume": 1.0
-  }
-}
-```
-
----
-
-## HTTP API
-
-**Base URL:** `http://127.0.0.1:5100`
-
-| Endpoint | Method | Request | Response | Purpose |
-|----------|--------|---------|----------|---------|
-| `/api/status` | GET | — | `{ running, activeVoices, queueDepth }` | Service health |
-| `/api/voices` | GET | — | `[{ id, name, sampleRate }]` | List available voices |
-| `/api/speak` | POST | `{ text, source?, voice? }` | 202 `{ queued, id }` | Queue text to speak |
-| `/api/speak-selection` | POST | `{ voice? }` | 202 `{ queued, id, text }` | Speak clipboard selection |
-| `/api/stop` | POST | — | 200 `{ stopped }` | Stop and clear queue |
-
-**Error handling:**
-- 400: Bad request (missing required fields, e.g., empty text on `/api/speak`)
-- 202 Accepted: Request queued (not yet played)
-- 200 OK with `{ queued: false }`: `/api/speak-selection` when no text is selected
-
----
-
-## Development Workflow
-
-### Before Committing
-
-1. **Test:** Run `dotnet test tests/SysTTS.Tests/` — all must pass
-2. **Build:** Run `dotnet build src/SysTTS/SysTTS.csproj` — no errors
-3. **Manual verification:** Start app, test hotkeys, verify API endpoints
-4. **Lint:** Watch for compiler warnings (treat as errors)
-
-### When Adding Features
-
-1. **Tests first:** Write failing test in `tests/SysTTS.Tests/`
-2. **Implementation:** Write minimal code to pass test
-3. **Integration:** Verify hotkeys/API/audio playback work end-to-end
-4. **Documentation:** Update TECHNICAL_SPEC.md with new components/behavior
-5. **Configuration:** Update appsettings.json defaults if needed
-
-### Stream Deck Plugin Development
-
-1. **Link for development:** `streamdeck link` (creates symlink to plugin folder)
-2. **Watch for changes:** `npm run watch` (rebuilds on file changes)
-3. **Reload in Stream Deck:** Right-click plugin → Reload
-4. **Build for distribution:** `npm run build` (outputs `.streamDeckPlugin` package)
-
-### Debugging
-
-- **Main app:** `dotnet run --project src/SysTTS/SysTTS.csproj` (logs to console)
-- **Tests:** Set breakpoints in test, run with Visual Studio debugger
-- **API calls:** Use `curl` or Postman to test endpoints locally
-- **Hotkeys:** Verify message pump is running (WinForms must be active)
-
----
-
-## Common Issues
-
-| Issue | Cause | Solution |
-|-------|-------|----------|
-| Port 5100 in use | Another app listening | Change port in appsettings.json, or kill existing process |
-| Voices not found | Models not downloaded | Run `scripts/download-models.ps1` |
-| Hotkeys not responding | WinForms window not active | Focus the main window (tray icon exists) |
-| Audio not playing | Output device not available | Check `Audio.OutputDevice` in config, set to null for default |
-| ONNX model error | Corrupted file or old Sherpa-ONNX version | Re-download model, verify .onnx.json is valid |
-| Espeak data missing | Path misconfigured | Verify `Service.EspeakDataPath` points to espeak-ng-data directory |
-
----
-
-## References
-
-- **Piper Voices:** https://huggingface.co/rhasspy/piper-voices
-- **Sherpa-ONNX:** https://github.com/k2-fsa/sherpa-onnx
-- **NAudio:** https://github.com/naudio/NAudio
-- **Stream Deck SDK:** https://developer.elgato.com/documentation/stream-deck/
-
----
+<!-- GENERATED FILE — DO NOT EDIT. -->
+<!-- Shared rules: claude-env/shared/claude-md/. Project rules: CLAUDE.local.md. -->
+<!-- Regenerate: helpers/sync-claude-md.sh <repo> -->
+
+
+# Shared Rules (universal)
+
+<!-- Canonical source: claude-env/shared/claude-md/00-universal.md. Edit HERE, not in any generated CLAUDE.md. -->
+
+These behavioral rules are shared across all of Patrick's repos. They are assembled into each repo's `CLAUDE.md` by `claude-env/helpers/sync-claude-md.sh`. Project-specific contracts live in that repo's `CLAUDE.local.md`.
+
+## Critical Behavioral Checkpoints
+
+| Checkpoint | Rule |
+|------------|------|
+| **DIAGNOSE BEFORE FIX** | Diagnose root cause first (inspect, measure, log). NEVER guess. Verify the fix before reporting. |
+| **PRODUCT DECISIONS** | When Patrick makes a UX/product decision, implement it. Technical objections only for data loss, security, or irreversibility. Record in `docs/decisions.md`. |
+| **TEST BEFORE SUGGESTING** | NEVER tell the user to do something without verifying it works. If you can't test it, say so. |
+| **VERIFY BEFORE CLAIMING DONE** | Every "✓ / verified / works / passing" must be backed by an exact command and its real output. Label provenance: verified-by-me, trusted-from-agent, or not-verified. A bundle-grep proves code shipped, not that the feature works; `curl` does not enforce CORS; a "Skipping X / not installed" message that exits 0 is failure wearing a success mask — treat it as a blocker. |
+| **AUDIT THE CLASS** | When a bug is found as "we forgot X in location Y," immediately search every other location where X might also be missing. Fix the class, not the instance. |
+
+## Principles
+
+| Principle | Description |
+|-----------|-------------|
+| **Rules are hard blocks** | Patrick's rules are HARD BLOCKS. Hooks must fail (non-zero), never warn-and-pass. |
+| **Challenge me** | Push back against bad practices or security vulnerabilities. |
+| **Admit limitations** | Never pretend capabilities you lack. Say so and suggest mitigations. |
+| **UI matches implementation** | Never put placeholder text suggesting unbuilt functionality. |
+| **Evaluate all options** | Before saying "no", consider all tools: Bash, PowerShell, web access, APIs, system commands. |
+| **Do it yourself** | Work autonomously. Never ask the user to do something you can do. Escalate only for commit/deploy approval or genuine capability gaps. |
+| **Act on credentials** | When given API keys/passwords, use them directly — don't hand instructions back. Pull from Key Vault / `.env` before asking. |
+| **Don't propose deferring** | When blocked, push through or ask Patrick to unblock and stand by. Don't recommend "defer to a later session." |
+| **Questions require answers** | If you ask "Ready to commit?" — STOP and wait. Never ask then immediately act. |
+| **No feature regression** | Changes must never silently lose functionality. |
+| **Fix problems immediately** | No technical debt. Fix deprecated code, broken things, suboptimal patterns now. |
+| **Flag deprecated APIs** | Use current APIs in new code. Fix straightforward deprecations; flag complex ones. |
+| **Right-size to scale** | Match engineering effort to actual scope; don't over-engineer hobby projects. But never dodge a firm requirement the user set. |
+| **Design prototypes are contracts** | Implement EVERY effect in a prototype. |
+| **PowerShell ONLY for Windows** | The Bash tool runs actual bash. For Windows: `powershell.exe -Command "..."`. Never raw bash syntax for Windows targets. |
+| **Prefer FOSS / winget** | MIT/Apache/BSD over proprietary. Lightweight, offline-capable. |
+| **No paid services** | Never sign up for paid services on Patrick's behalf. |
+| **No ad tech/tracking** | No advertising, tracking pixels, or data sharing with X/Meta. |
+| **Cite sources** | When making recommendations, cite sources so Patrick can verify. |
+| **Respect public APIs** | Rate limit (single-concurrency, 2s gap), cache in DB, polite User-Agent. |
+| **Log sanitization** | ALL user strings in logs wrapped in sanitization wrappers where applicable. |
+| **Cross-browser / local CSS** | Standard APIs and CSS only. Locally compiled CSS; CDN only for large libs with SRI hashes. Firefox is Patrick's primary browser — verify UI changes there, not just Chromium. |
+| **Verify repo context** | Before writing files or committing to a repo other than the one open in the IDE, verify the target repo's current branch and confirm it's the correct destination. |
+| **Preserve original media** | Never degrade user-uploaded media. Store originals at full quality; use resized/compressed versions for display only, always with a path to the original. |
+| **Own it all** | Any Claude instance is "me" — don't distance from prior-session work. Environment gaps blocking verification (missing binaries, locked sudo, missing creds) are mine to surface and unblock; "pre-existing on main" is descriptive, not exculpatory. |
 
 ## Coding Standards
 
-- **Language:** C# (.NET 8) + TypeScript (Stream Deck plugin)
-- **Naming:** `PascalCase` for classes/methods, `camelCase` for properties/variables
-- **Nullable:** Enabled; use `!` sparingly, prefer `??` for defaults
-- **Async:** Prefer `async/await`, but use `Task.Run()` for long-running synthesis
-- **Logging:** Use `ILogger` from DI; avoid console output in production code
-- **Comments:** Explain "why", not "what" — code should be self-documenting
+- **Naming:** JavaScript/TypeScript `camelCase` | Python `snake_case` (PEP 8) | Bash `snake_case` | Docs GitHub-flavored Markdown.
+- **Testing:** Code compiling is NOT sufficient. Run tests before committing. Test external dependencies before integrating.
+- **Script validation:** Bash scripts must be shellcheck-clean. Python scripts must pass linting (flake8 or ruff).
+- **Hot loops:** Default to numba `@njit` for tight numerical Python loops (standing approval).
+- **Dependencies:** Walk the peer-dep graph with `npm view` BEFORE installing; never `--force` past a conflict; treat the runtime version as fixed.
+
+### Model Delegation
+| Model | Use for |
+|-------|---------|
+| **Haiku** | Quick scripts, simple file ops, straightforward fixes, running tests |
+| **Sonnet** | General development, coding, debugging (default) |
+| **Opus** | Architecture, complex refactors, deep research, system design |
+
+Run agents in parallel when possible.
+
+## Communication
+
+- **Research before asking** — search the web first; only ask Patrick if still unclear.
+- **Correction vs inquiry** — if Patrick asks "Did you do X?", ask whether it should become a guideline.
+- **Proactive updates** — when agreement is reached on a feedback-based rule, add it to the shared rules immediately.
+- **Always give links** — provide PR/deploy links immediately after pushing; don't make Patrick ask.
+
+## Session Protocol
+
+- **Starting ("hello!"):** read `CLAUDE.md` + the repo's stated session files (e.g. `sessionState.md`, `claudeLog.md`, `docs/decisions.md`).
+- **During:** checkpoint to `sessionState.md` after major tasks, every 10–15 exchanges, and before complex work. Only load files actively needed (CLAUDE.md always loaded). Delete completed plan files; verify git state before working from plans.
+- **Ending ("night!"):** update `sessionState.md`, commit pending changes, update `claudeLog.md`.
+
+## File Management
+
+- **CLAUDE.md backups:** save as `claude_MMDDYYYY-N.md` before a manual update (N/A for generated CLAUDE.md — edit `CLAUDE.local.md` or the shared fragments instead).
+- **Logging:** log to `claudeLog.md` with date, description, result. Omit sensitive data.
+- **Archives:** source to `archive/`. Delete `__pycache__`, `node_modules`, `bin/`, `obj/`, logs, temp files.
+
+## Security
+
+- **Personal identifiers are secrets.** Personal email addresses, phone numbers, home addresses, and personal domains (e.g. `psford.com`) are credentials — never hardcoded in source committed to public repos. Use `example.com` in defaults, docs, and config templates. Real values belong in `.env` (gitignored) or environment variables only. Support/business emails created for a project are fine.
+- Review SAST/DAST coverage when introducing new frameworks (SecurityCodeScan for C#, Bandit for Python).
+- Hooks run automatically — if blocked, try to adjust; if stuck, ask Patrick.
+
+# Git Flow (develop → main)
+
+<!-- Canonical source: claude-env/shared/claude-md/git-flow-develop-main.md. -->
+<!-- Branch names are parameterized: develop / main. -->
+<!-- Repos that do not follow this flow (e.g. a single-trunk `master` model) should -->
+<!-- omit this fragment and document their flow in CLAUDE.local.md. -->
+
+## Critical Git Checkpoints
+
+| Checkpoint | Rule | Enforcement |
+|------------|------|-------------|
+| **COMMITS** | Show status → diff → log → message → WAIT for explicit approval. A question is NOT approval. | Hook reminds; manual |
+| **main BRANCH** | NEVER commit, merge, push --force, or rebase on `main`. | **BLOCKED** |
+| **REVERSE MERGE** | NEVER merge `main` INTO `develop` (flow is `develop` → `main` only). | **BLOCKED** |
+| **PR MERGE** | Patrick merges via GitHub web only — NEVER use `gh pr merge`. | **BLOCKED** |
+| **MERGED PRs** | NEVER edit/push to merged/closed PRs. Always create a NEW PR. | **BLOCKED** |
+| **NO RESET --HARD** | NEVER run `git reset --hard` (it destroyed uncommitted work once). Use `git merge`/`git rebase` to sync; `git stash` first if the tree is dirty. | **BLOCKED** |
+
+## Branching Strategy
+
+```
+develop (work here) → PR → main (production)
+                                  ↑
+                           NEVER reverse this
+```
+
+- **Feature branches** for: new services, architecture changes, multi-file refactors, big UI changes, multi-session work, 5+ files.
+- **Direct on `develop`** for: small fixes, tweaks, internal docs.
+- **NEVER** commit directly to `main`, merge to it via CLI, deploy without an explicit "deploy", or click "Update branch" on the GitHub PR page.
+- Before branching: `git fetch origin` and check `git log origin/main..develop` — never assume branches are in sync, and never offer to reuse the current branch without confirming it isn't `main`.
+
+### Forbidden Operations (on develop)
+| Operation | Why |
+|-----------|-----|
+| `git merge main` | `develop` flows TO `main` only |
+| `git pull origin main` | Pulls and merges `main` into `develop` |
+| `git rebase main` | Rewrites `develop` history based on `main` |
+
+If the branches diverge, merge `develop` into `main` via PR — never the reverse.
+
+## PR Rules
+
+**Verification — when asked to check a PR:**
+1. `git fetch origin` (ALWAYS fetch first).
+2. `git log origin/main..develop --oneline` (ALWAYS `origin/main`, not local).
+3. `gh pr view <N> --json commits` to see what's in the PR.
+4. Report the delta — never just update PR title/body. Never assert PR state from memory; confirm with `gh pr view`.
+
+**Merged PRs** — once merged/closed, a PR is DEAD. After any `git push`:
+1. Check `gh pr list --head develop --base main --state open`.
+2. No open PR → create a NEW one. Never reference old PR numbers without checking state. If Patrick is deploying, the previous PR is already merged — create a new PR for any follow-up fix.
+
+## Pre-Commit Protocol
+
+Before every commit, show Patrick:
+1. `git status` — staged, unstaged, untracked
+2. `git diff` — actual changes
+3. `git log -3` — recent commits for style
+4. Planned commit message
+5. What will NOT happen (no `main`, no deploy, no PR)
+
+Then **WAIT for explicit approval**. A question or comment resets the checkpoint — answer it, then wait again. Also verify: `claudeLog.md` updated, all files staged, feature tested.
+
+# Stack: .NET Windows Service
+
+<!-- Canonical source: claude-env/shared/claude-md/stack-windows-service.md. -->
+<!-- Shared by SysTTS, whisper-service, and any future .NET Windows-service repo. -->
+
+## Build & Run
+- `dotnet build`, `dotnet test`, `dotnet run`. Windows-only scripts run via PowerShell (`powershell.exe -Command "..."` from WSL).
+- Configuration changes (`appsettings.json`) require an application restart — there is no hot reload for a tray/service host.
+- Treat compiler warnings as errors before committing.
+
+## Testing
+- Stack: **xUnit + Moq + FluentAssertions**.
+- Test naming: `MethodName_Condition_Expected`.
+- Structure every test Arrange / Act / Assert.
+- `dotnet test` must pass before committing (run all, or filter by class during dev).
+
+## Coding Conventions
+- C# (.NET 8): PascalCase types/methods, camelCase locals/fields.
+- Nullable enabled: use `??` for defaults; avoid `!` (null-forgiving) unless justified.
+- Prefer `async`/`await`; offload long-running synthesis/IO with `Task.Run`.
+- Logging via `ILogger` from DI; no `Console.WriteLine` in production paths.
+
+## Service / Host Patterns
+- Tray + Kestrel hosts: marshal UI/STA-thread work off background request threads via the captured `SynchronizationContext`.
+- Long native callbacks (e.g. Win32 hooks) must offload work to stay within their callback deadline.
+
+## CI / Release
+- CI is the shared reusable workflow: `psford/claude-env/.github/workflows/windows-service-build-release.yml@main`. The companion repo's workflow is a thin wrapper passing `app_name`, `project_path`, `appsettings_source`.
+- Releases are self-contained executables + a Windows Service install script, published as GitHub Releases (zip + SHA256).
+- Deployment to a Windows host uses `infrastructure/windows-deploy/deploy-app.ps1` against the app registry.
+
+# SysTTS — project-specific
+
+<!-- Project-specific rules. Universal rules + git flow + .NET-Windows-service stack -->
+<!-- rules above are assembled from claude-env/shared/claude-md/ by sync-claude-md.sh. -->
+<!-- Edit THIS file (or the shared fragments) — never edit the generated CLAUDE.md. -->
+<!-- Generic .NET test stack (xUnit/Moq/FluentAssertions, AAA, naming), build/test -->
+<!-- conventions, ILogger-from-DI, async/Task.Run, and config-requires-restart come -->
+<!-- from the shared Windows-service stack tier above and are not repeated here. -->
+
+Last verified: 2026-06-13
+
+## Project Overview
+System-level Text-to-Speech service for Windows:
+- **System tray icon** for lifecycle control
+- **HTTP API** (localhost:5100) for programmatic TTS from any app
+- **Global hotkeys** (F22, F23) for quick-speak with voice selection
+- **Stream Deck plugin** for button-based voice control
+- **Neural voices** via Piper ONNX models through Sherpa-ONNX
+- **Audio** via NAudio (volume + device selection)
+- **Priority-based speech queue** with interrupt behavior
+
+Sibling of whisper-service (both share the `[WINDOWS-SERVICE]` stack tier).
+
+## Project Structure
+```
+src/SysTTS/                    # WinForms + ASP.NET Core (Kestrel) app
+  Program.cs                   # host builder, endpoints
+  appsettings.json             # port, voices, hotkeys, sources, audio
+  TrayApplicationContext.cs    # system tray + lifecycle
+  Services/  VoiceManager, TtsEngine (Sherpa-ONNX, thread-unsafe per instance),
+             AudioPlayer (NAudio), SpeechQueue (priority, serial),
+             SpeechService, HotkeyService (Win32 hooks, dedicated thread),
+             ClipboardService, UserPreferences
+  Handlers/  SpeakSelectionHandler (clipboard integration for hotkeys)
+  Interop/   NativeMethods, VirtualKeyParser (Win32 P/Invoke)
+  Settings/  Service, Audio, Hotkey, Source POCOs
+  Forms/     VoicePickerForm
+tests/SysTTS.Tests/            # xUnit
+streamdeck-plugin/             # TypeScript/Node.js (rollup); com.systts.sdPlugin/
+voices/ espeak-ng-data/ user-preferences.json   # gitignored runtime assets
+scripts/download-models.ps1    # fetch Piper models from HuggingFace
+docs/  CUSTOM_VOICES.md, INTEGRATION.md, TECHNICAL_SPEC.md
+```
+
+## Build & Run (project-specific)
+```bash
+dotnet build src/SysTTS/SysTTS.csproj
+dotnet test  tests/SysTTS.Tests/
+powershell.exe -File scripts/download-models.ps1   # one-time, Piper voice models
+dotnet run --project src/SysTTS/SysTTS.csproj      # tray icon + HTTP API
+curl http://127.0.0.1:5100/api/status              # verify API
+# Stream Deck plugin:
+cd streamdeck-plugin && npm install && npm run build   # npm run watch during dev
+```
+Before committing, additionally do **manual verification**: start app, test F22/F23 hotkeys, hit the API endpoints. Update `docs/TECHNICAL_SPEC.md` when adding components, and `appsettings.json` defaults when adding config keys.
+
+## Architecture — Threading Model
+- **Main STA thread:** WinForms context + message pump. Required for clipboard and UI dialogs (VoicePickerForm). `SynchronizationContext` captured at startup, injected via DI.
+- **HotkeyService-Hook thread:** dedicated background thread with its own message pump; installs `WH_KEYBOARD_LL` (needs a message loop on the installing thread); runs `Application.Run()`; offloads processing to `Task.Run()` to stay within the 1000ms hook-callback timeout; marshals UI to the STA thread.
+- **Kestrel thread pool:** HTTP API on background threads; marshals clipboard ops to the STA thread.
+- **Synthesis/playback:** TtsEngine (Sherpa-ONNX) and AudioPlayer (NAudio) run off-thread; no blocking on the main thread.
+- **Key rule:** SpeechService, TtsEngine, AudioPlayer, SpeechQueue are DI **singletons**; parallel requests serialize through the queue.
+
+## Architecture — Speech Queue
+Priority queue (lower number = higher precedence); serial synthesis+playback (no audio collision); configurable max depth (default 10, oldest low-priority evicted when full); `InterruptOnHigherPriority` stops current speech for a higher-priority request. Each source (e.g. `t-tracker`, `default`) has a priority and optional regex filters.
+
+## Architecture — Voice Manager
+Startup scans `voices/` for `.onnx` + `.onnx.json` pairs; TtsEngine instances lazy-loaded per voice and cached until shutdown; `FileSystemWatcher` detects new/deleted models at runtime (new models available immediately; source-mapping config changes need a restart).
+
+## Architecture — Win32 Keyboard Hooks
+`WH_KEYBOARD_LL` low-level hook via P/Invoke (not `RegisterHotKey`); delegate ref stored in a field to prevent GC; filters registered virtual key codes (F22/F23). Two modes: **Direct** (capture selection, speak with last-picked voice, fall back to configured) and **Picker** (capture text, show VoicePickerForm on STA thread, speak with selected voice, persist selection to UserPreferences).
+
+## Architecture — Sherpa-ONNX & NAudio
+Sherpa-ONNX (`org.k2fsa.sherpa.onnx` 1.12.23 + `...runtime.win-x64`) is **not thread-safe per instance** (TtsEngine serializes calls); needs `espeak-ng-data/` for phonemization; text → phonemes → float32 audio. NAudio (2.2.1) wraps WaveOutEvent, converts float32 → int16 PCM, volume via `WaveOutEvent.Volume`.
+
+## Configuration Schema (`appsettings.json`)
+```json
+{
+  "Service": { "Port": 5100, "VoicesPath": "voices", "DefaultVoice": "en_US-amy-medium",
+               "EspeakDataPath": "espeak-ng-data", "MaxQueueDepth": 10, "InterruptOnHigherPriority": true },
+  "Sources": { "source-name": { "voice": "voice-id", "filters": ["pattern"] , "priority": 1 } },
+  "Hotkeys": [ { "Key": "F23", "Mode": "direct", "Voice": "voice-id" }, { "Key": "F22", "Mode": "picker" } ],
+  "Audio":   { "OutputDevice": null, "Volume": 1.0 }
+}
+```
+Port 5100 is localhost-only. Configuration changes require an application restart.
+
+## HTTP API (`http://127.0.0.1:5100`)
+| Endpoint | Method | Request | Response | Purpose |
+|----------|--------|---------|----------|---------|
+| `/api/status` | GET | — | `{ running, activeVoices, queueDepth }` | health |
+| `/api/voices` | GET | — | `[{ id, name, sampleRate }]` | list voices |
+| `/api/speak` | POST | `{ text, source?, voice? }` | 202 `{ queued, id }` | queue text |
+| `/api/speak-selection` | POST | `{ voice? }` | 202 `{ queued, id, text }` | speak clipboard selection |
+| `/api/stop` | POST | — | 200 `{ stopped }` | stop + clear queue |
+
+400 = bad request (e.g. empty text); 202 = queued; 200 `{ queued: false }` = speak-selection with no selection.
+
+## Dependencies
+`org.k2fsa.sherpa.onnx` 1.12.23 + `...runtime.win-x64` (TTS); `NAudio` 2.2.1 (playback); `Microsoft.AspNetCore.App` (Kestrel/DI); test stack xUnit 2.5.3 / Moq 4.20.72 / FluentAssertions 6.12.2.
+
+## Common Issues
+| Issue | Cause | Fix |
+|-------|-------|-----|
+| Port 5100 in use | another listener | change port or kill process |
+| Voices not found | models not downloaded | run `scripts/download-models.ps1` |
+| Hotkeys not responding | WinForms window not active | focus the main window |
+| Audio not playing | output device unavailable | set `Audio.OutputDevice` to null |
+| ONNX model error | corrupt file / old Sherpa-ONNX | re-download, verify `.onnx.json` |
+| Espeak data missing | path misconfigured | check `Service.EspeakDataPath` |
+
+## References
+Piper voices (huggingface.co/rhasspy/piper-voices) · Sherpa-ONNX (github.com/k2-fsa/sherpa-onnx) · NAudio (github.com/naudio/NAudio) · Stream Deck SDK (developer.elgato.com).
