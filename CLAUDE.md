@@ -31,11 +31,16 @@ These behavioral rules are shared across all of Patrick's repos. They are assemb
 | **Do it yourself** | Work autonomously. Never ask the user to do something you can do. Escalate only for commit/deploy approval or genuine capability gaps. |
 | **Act on credentials** | When given API keys/passwords, use them directly — don't hand instructions back. Pull from Key Vault / `.env` before asking. |
 | **Don't propose deferring** | When blocked, push through or ask Patrick to unblock and stand by. Don't recommend "defer to a later session." |
+| **Don't freelance the design** | Implementation executes the agreed design — do NOT invent alternative mechanisms, swap approaches, or unilaterally descope when it fights back. The moment a designed mechanism needs a *second* workaround to function, STOP and go back to the drawing board with Patrick. Never ship a freelanced substitute or quiet descope. |
+| **Tasks are pass/fail** | A dispatched task — to a subagent, or to yourself executing a plan phase — is pass/fail. PASS → return the artifact + info the orchestrator needs (normal flow). FAIL (plan wrong / tests can't pass / approach fights constraints) → STOP and report "this didn't work + why" up to the orchestrator or human; do NOT redesign, descope, weaken tests, or try a second mechanism to force a pass. Attempt budget for the *approach itself* is one. The way forward is the orchestrator's/human's call — "theirs not to reason why." |
 | **Questions require answers** | If you ask "Ready to commit?" — STOP and wait. Never ask then immediately act. |
 | **No feature regression** | Changes must never silently lose functionality. |
 | **Fix problems immediately** | No technical debt. Fix deprecated code, broken things, suboptimal patterns now. |
+| **Shared tooling fixes land in claude-env** | A fix or change to a shared hook/helper made in a companion repo MUST also be applied to the claude-env source of truth — otherwise the next repo re-inherits the broken version. |
 | **Flag deprecated APIs** | Use current APIs in new code. Fix straightforward deprecations; flag complex ones. |
 | **Right-size to scale** | Match engineering effort to actual scope; don't over-engineer hobby projects. But never dodge a firm requirement the user set. |
+| **No rabbit holes** | Platform-first: CSS/stdlib/framework primitives before ANY custom engine. Custom machinery Patrick didn't explicitly request requires asking him BEFORE building it — a technically clean rabbit hole is still a rabbit hole. |
+| **No invisible work, no ungated deploys** | Work exists in version control continuously — ask for WIP-commit permission at session start, or park (`refs/parked/`) before any discard. Show Patrick the cheapest viewable artifact BEFORE building a large feature. Nothing deploys without tests + visual review against the exact SHA being shipped. |
 | **Design prototypes are contracts** | Implement EVERY effect in a prototype. |
 | **PowerShell ONLY for Windows** | The Bash tool runs actual bash. For Windows: `powershell.exe -Command "..."`. Never raw bash syntax for Windows targets. |
 | **Prefer FOSS / winget** | MIT/Apache/BSD over proprietary. Lightweight, offline-capable. |
