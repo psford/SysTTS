@@ -9,6 +9,8 @@
 
 Last verified: 2026-06-13
 
+A rule written as `specs/<file>.md#<section>` is held by that section of the spec corpus, in claude-harness's `plugins/psford-tickets/specs/`. Read the section before acting on the rule.
+
 ## Project Overview
 System-level Text-to-Speech service for Windows:
 - **System tray icon** for lifecycle control
@@ -52,7 +54,8 @@ curl http://127.0.0.1:5100/api/status              # verify API
 # Stream Deck plugin:
 cd streamdeck-plugin && npm install && npm run build   # npm run watch during dev
 ```
-Before committing, additionally do **manual verification**: start app, test F22/F23 hotkeys, hit the API endpoints. Update `docs/TECHNICAL_SPEC.md` when adding components, and `appsettings.json` defaults when adding config keys.
+- **Before committing, the running app is checked by hand: start it, press F22/F23, hit the API endpoints:** `specs/testing.md#net-tests`
+- **`docs/TECHNICAL_SPEC.md` changes when a component is added, and the `appsettings.json` defaults when a config key is:** `specs/code.md#docs-move-with-the-code`
 
 ## Architecture — Threading Model
 - **Main STA thread:** WinForms context + message pump. Required for clipboard and UI dialogs (VoicePickerForm). `SynchronizationContext` captured at startup, injected via DI.
