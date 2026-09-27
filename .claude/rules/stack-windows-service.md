@@ -1,0 +1,1 @@
+../../../claude-env/shared/claude-md/stack-windows-service.md

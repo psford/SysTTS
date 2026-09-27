@@ -1,8 +1,3 @@
-<!-- GENERATED FILE — DO NOT EDIT. -->
-<!-- Shared rules: claude-env/shared/claude-md/. Project rules: CLAUDE.local.md. -->
-<!-- Regenerate: helpers/sync-claude-md.sh <repo> -->
-
-
 # SysTTS — project-specific
 
 <!-- Project-specific rules. Universal rules + git flow + .NET-Windows-service stack -->
