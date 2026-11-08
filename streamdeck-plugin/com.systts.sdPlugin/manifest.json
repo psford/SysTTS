@@ -9,6 +9,12 @@
   "Category": "Utilities",
   "CategoryIcon": "images/plugin-icon",
   "CodePath": "bin/index.js",
+  "Nodejs": {
+    "Version": "24"
+  },
+  "Software": {
+    "MinimumVersion": "7.1"
+  },
   "OS": [
     {
       "Platform": "windows",
