@@ -22,5 +22,6 @@ jobs:
       app_name: SysTTS
       project_path: src/SysTTS/SysTTS.csproj
       appsettings_source: src/SysTTS/appsettings.json
+      dotnet_version: '10.0'
     permissions:
       contents: write
