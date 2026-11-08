@@ -4,7 +4,7 @@ namespace SysTTS.Interop;
 
 /// <summary>
 /// Win32 P/Invoke declarations for keyboard hooks and input simulation.
-/// Uses nint for pointer types (.NET 8 convention).
+/// Uses nint for pointer types (the modern .NET convention).
 /// </summary>
 public static class NativeMethods
 {
