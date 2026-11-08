@@ -6,7 +6,7 @@ SysTTS provides a unified TTS endpoint that applications can integrate with. Sel
 
 ## Prerequisites
 
-- **.NET 8 SDK** — [Download from microsoft.com](https://dotnet.microsoft.com/en-us/download/dotnet/8.0)
+- **.NET 10 SDK** — [Download from microsoft.com](https://dotnet.microsoft.com/en-us/download/dotnet/10.0)
 - **Windows 10/11** — WinForms and Win32 keyboard hooks required
 - **Optional:** Stream Deck + Elgato Stream Deck software for hardware control
 
