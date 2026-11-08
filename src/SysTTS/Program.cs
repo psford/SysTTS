@@ -18,7 +18,7 @@ static class Program
     static async Task Main(string[] args)
     {
         // Install WindowsFormsSynchronizationContext on the STA thread before
-        // anything else — .NET 8 doesn't auto-install it until Application.Run,
+        // anything else — WinForms doesn't auto-install it until Application.Run,
         // but we need it earlier for DI registration.
         Application.EnableVisualStyles();
         Application.SetCompatibleTextRenderingDefault(false);
